@@ -1,0 +1,1328 @@
+<!doctype html>
+<!-- begeleiding.blade.php versie 30 okt 2026 14:55: stappenplan + weekstrook -->
+<html lang="nl" class="no-js">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="portaal/logo-icoon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Student-docentrelatie — Persoonlijke Ontwikkelomgeving</title>
+<script>
+  /* =====================================================================
+     BEWEGINGSVOORKEUR — moet in de <head> staan, vóór de pagina getekend wordt,
+     anders zie je heel even de standaardanimaties voordat de voorkeur actief is.
+
+     Modi op <html data-motion="...">:
+       (geen attribuut) = volg de systeeminstelling (prefers-reduced-motion)
+       standard         = volledige animaties
+       reduced          = korte, eenvoudige overgangen zonder verschuiving
+       off              = geen niet-noodzakelijke animaties of overgangen
+
+     Volgorde waarin de voorkeur bepaald wordt:
+       1. data-motion staat al in de HTML (later: door de server uit het account)
+       2. keuze die in deze browser is opgeslagen (localStorage)
+       3. niets: de systeeminstelling bepaalt het
+     ===================================================================== */
+  (function () {
+    var root = document.documentElement;
+    root.className = 'js'; // zo kan CSS onderdelen verbergen die alleen met JavaScript werken
+
+    var MODI = ['standard', 'reduced', 'off'];
+    var SLEUTEL = 'poo-beweging';
+
+    function leesLokaal() { try { return localStorage.getItem(SLEUTEL); } catch (e) { return null; } }
+    function schrijfLokaal(m) {
+      try { if (m) localStorage.setItem(SLEUTEL, m); else localStorage.removeItem(SLEUTEL); } catch (e) {}
+    }
+    function pasToe(m) {
+      if (MODI.indexOf(m) > -1) root.setAttribute('data-motion', m);
+      else root.removeAttribute('data-motion');
+    }
+
+    if (!root.hasAttribute('data-motion')) pasToe(leesLokaal());
+
+    // Eén centrale ingang voor de hele app. Een instellingenmenu roept later POO.beweging.zet(...) aan.
+    window.POO = window.POO || {};
+    window.POO.beweging = {
+      modi: ['systeem'].concat(MODI),
+      // De gekozen voorkeur: 'systeem', 'standard', 'reduced' of 'off'
+      voorkeur: function () { return root.getAttribute('data-motion') || 'systeem'; },
+      // Wat er echt gebeurt: de strengste van (voorkeur, systeeminstelling)
+      effectief: function () {
+        var m = root.getAttribute('data-motion');
+        if (m === 'off') return 'off';
+        if (m === 'reduced' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 'reduced';
+        return 'standard';
+      },
+      zet: function (m) {
+        if (m !== 'systeem' && MODI.indexOf(m) === -1) throw new Error('Onbekende bewegingsmodus: ' + m);
+        pasToe(m);
+        schrijfLokaal(m === 'systeem' ? null : m);
+        root.dispatchEvent(new CustomEvent('poo:beweging', { detail: { voorkeur: m } }));
+      }
+    };
+  })();
+
+  /* =====================================================================
+     THEMAVOORKEUR (licht / donker) — zelfde opzet als de bewegingsvoorkeur.
+       licht   = standaard
+       donker  = donkere kleuren
+       systeem = volg de instelling van het apparaat (prefers-color-scheme)
+     De keuze staat in deze browser (localStorage 'poo-thema'). Op <html> komt data-thema="donker"
+     als het donker moet zijn; de CSS hieronder vult dan de donkere kleuren in.
+     ===================================================================== */
+  (function () {
+    var root = document.documentElement;
+    var SLEUTEL = 'poo-thema';
+    var MODI = ['licht', 'donker', 'systeem'];
+    var systeemDonker = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function lees() { try { return localStorage.getItem(SLEUTEL) || 'licht'; } catch (e) { return 'licht'; } }
+    function schrijf(m) { try { localStorage.setItem(SLEUTEL, m); } catch (e) {} }
+    function pasToe(m) {
+      var donker = m === 'donker' || (m === 'systeem' && systeemDonker && systeemDonker.matches);
+      if (donker) root.setAttribute('data-thema', 'donker'); else root.removeAttribute('data-thema');
+    }
+
+    pasToe(lees());
+    // Staat "systeem" aan en verandert het apparaat van licht naar donker (bijv. 's avonds)? Meteen meegaan.
+    if (systeemDonker && systeemDonker.addEventListener) {
+      systeemDonker.addEventListener('change', function () { if (lees() === 'systeem') pasToe('systeem'); });
+    }
+
+    window.POO = window.POO || {};
+    window.POO.thema = {
+      modi: MODI,
+      voorkeur: lees,                                            // 'licht', 'donker' of 'systeem'
+      donker: function () { return root.getAttribute('data-thema') === 'donker'; },
+      zet: function (m) {
+        if (MODI.indexOf(m) === -1) throw new Error('Onbekend thema: ' + m);
+        schrijf(m);
+        pasToe(m);
+        root.dispatchEvent(new CustomEvent('poo:thema', { detail: { voorkeur: m } }));
+      }
+    };
+  })();
+</script>
+<style>
+  /* =====================================================================
+     DESIGN TOKENS — contrast nagerekend (WCAG 2.2 AA):
+     tekst ≥ 4.5:1, randen/focus/iconen ≥ 3:1.
+     ===================================================================== */
+  :root {
+    /* Merkkleuren */
+    --kleur-navy: #15233A;
+    --kleur-navy-licht: #1E3A5F;
+    --kleur-navy-hover: #213A5E;
+    --kleur-blauw: #60ACE1;
+    --kleur-blauw-donker: #3F8CDD;
+    --kleur-blauw-focus: #1F6FC2;        /* 5.1:1 op wit, 4.4:1 op lila */
+    --kleur-geel: #FEBD3A;
+    --kleur-rood: #F66169;
+    --kleur-lila: #F1EBF7;
+
+    /* Interfacekleuren */
+    --kleur-achtergrond: var(--kleur-lila);
+    --kleur-oppervlak: #FFFFFF;
+    --kleur-oppervlak-zacht: #F7F4FB;    /* lichte vlakjes binnen een kaart */
+    --kleur-rand: #E4DCEE;
+    --kleur-rand-veld: #8B8FA6;          /* 3.2:1 op wit */
+    --kleur-rand-veld-hover: #6B7088;
+    --kleur-tekst: #161B26;              /* 17:1 op wit */
+    --kleur-tekst-zacht: #4B5468;        /* 7.6:1 op wit */
+    --kleur-tekst-subtiel: #5B6477;      /* 5.9:1 op wit: metadata, datums */
+    --kleur-icoon: #5B6477;
+    --kleur-link: #1F6FC2;               /* 5.1:1 op wit (#3F8CDD haalde maar 3.6:1) */
+    --kleur-link-hover: #17589C;
+    --kleur-op-navy: #FFFFFF;
+    --kleur-op-navy-zacht: #A9BDDA;      /* 8.2:1 op navy */
+    --kleur-op-navy-subtiel: #8FA6C8;    /* 6.3:1 op navy */
+    --kleur-focus-op-navy: #8EC1EE;      /* focusring op donkere vlakken: 8:1 */
+    --kleur-knop-tekst: #0B1A30;         /* 7:1 op blauw, 5:1 op blauw-donker */
+    --kleur-fout: #B91C1C;               /* 6.5:1 op wit */
+    --kleur-fout-achtergrond: #FEF2F2;
+    --kleur-fout-rand: #F8B4B8;
+    --kleur-waarschuwing: #8A5A00;       /* 5.9:1 op wit */
+    --kleur-skelet: #ECE6F3;
+    --kleur-skelet-glans: #F7F3FB;
+    --kleur-lijn: #F1ECF6;               /* dunne scheidingslijnen binnen een kaart */
+    --kleur-balk-leeg: #EEE8F5;          /* lege voortgangsbalk */
+    --kleur-donkere-kaart: var(--kleur-navy); /* donkere accentkaart (bijv. Mijn begeleiding) */
+    --kleur-donkere-kaart-rand: var(--kleur-navy);
+    --kleur-actief-vlak: var(--kleur-navy);   /* gekozen knop / fase (wit erop) */
+
+    /* Getinte labels en icoontjes: achtergrond + tekst (contrast ≥ 4.5:1 in beide thema's) */
+    --tint-blauw-bg: #DCEBFA;   --tint-blauw-tekst: #1E5FA8;
+    --tint-paars-bg: #EDE9FE;   --tint-paars-tekst: #5B21B6;
+    --tint-groen-bg: #D1FAE5;   --tint-groen-tekst: #065F46;
+    --tint-geel-bg: #FEF3C7;    --tint-geel-tekst: #92400E;
+    --tint-grijs-bg: #E5E7EB;   --tint-grijs-tekst: #374151;
+    --tint-rood-bg: #FEF1F2;    --tint-rood-rand: #FBC6CA;
+    color-scheme: light;
+
+    /* Typografie — alles in rem, zodat de lettergrootte van de gebruiker meetelt */
+    --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+    --tekst-xs: 0.75rem;        /* 12px: alleen codes en kleine labels */
+    --tekst-klein: 0.8125rem;   /* 13px: metadata */
+    --tekst-sm: 0.875rem;       /* 14px: meldingen, secundaire tekst */
+    --tekst-label: 0.9375rem;   /* 15px: labels, lijstregels */
+    --tekst-basis: 1rem;        /* 16px: gewone tekst */
+    --tekst-veld: max(16px, 1rem); /* nooit onder 16px: anders zoomt iPhone in bij typen */
+
+    /* Ruimte: stappen van 0.25rem (4px) */
+    --ruimte-1: 0.25rem; --ruimte-2: 0.5rem;  --ruimte-3: 0.75rem; --ruimte-4: 1rem;
+    --ruimte-5: 1.25rem; --ruimte-6: 1.5rem;  --ruimte-8: 2rem;     --ruimte-10: 2.5rem;
+    --ruimte-12: 3rem;   --ruimte-14: 3.5rem;
+
+    /* Vormen */
+    --radius-klein: 6px;
+    --radius: 8px;
+    --radius-groot: 12px;
+    --hoogte-bediening: 2.75rem;        /* 44px: ook een prettig tikdoel op touchscreens */
+    --hoogte-bediening-groot: 3rem;     /* 48px */
+    --schaduw-vlak: 0 1px 3px rgba(21,35,58,0.06), 0 1px 2px rgba(21,35,58,0.04);
+
+    /* Easing: hetzelfde voor de hele app */
+    --ease-uit: cubic-bezier(0.2, 0.7, 0.2, 1);    /* snel starten, zacht landen */
+    --ease-in-uit: cubic-bezier(0.45, 0, 0.25, 1); /* heen-en-weer */
+
+    /* ===== BEWEGING — modus "standard" =====
+       Componenten gebruiken ALLEEN deze tokens. De modi hieronder vullen ze anders in,
+       dus een component hoeft nooit zelf te weten welke modus actief is. */
+    --beweging-snel: 120ms;          /* hover, kleur, feedback op een klik */
+    --beweging-standaard: 200ms;     /* focus, meldingen, icoonwissel, uitklappen */
+    --beweging-intrede: 480ms;       /* binnenkomst van een onderdeel */
+    --beweging-stap: 50ms;           /* vertraging tussen opeenvolgende onderdelen */
+    --beweging-afstand: 8px;         /* verschuiving bij binnenkomst */
+    --beweging-afstand-klein: 4px;   /* verschuiving van meldingen */
+    --beweging-lift: -1px;           /* knop omhoog bij hover */
+    --beweging-druk: 0.985;          /* knop bij indrukken */
+    --beweging-icoon-draai: 12deg;
+    --beweging-icoon-schaal: 0.8;
+    --beweging-sfeer: running;       /* decoratieve achtergrond- en glansanimaties */
+    --beweging-spinner: 0.8s;        /* één rondje van de laadspinner */
+    --beweging-schud: 6px;           /* hoe ver een fout veld heen en weer trilt */
+    --beweging-schud-duur: 420ms;
+    --beweging-vulling: 800ms;       /* voortgangsbalken die vollopen */
+    --beweging-overlay: flex;        /* welkomstscherm: tonen (flex) of overslaan (none) */
+    --beweging-overlay-wacht: 1100ms;/* hoe lang een welkomstscherm blijft staan */
+    --beweging-overlay-uit: 350ms;   /* hoe lang het wegfaden duurt */
+  }
+
+  /* ===== Modus "reduced": kort, alleen infaden, geen verschuiving of sfeer ===== */
+  :root[data-motion="reduced"] {
+    --beweging-snel: 80ms;  --beweging-standaard: 120ms; --beweging-intrede: 200ms; --beweging-stap: 0ms;
+    --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+    --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 1.6s;
+    --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+    --beweging-overlay: flex; --beweging-overlay-wacht: 500ms; --beweging-overlay-uit: 200ms;
+  }
+  /* Systeeminstelling "minder beweging" geeft minimaal "reduced", ook als iemand "standard" kiest.
+     (Zelfde waarden als hierboven; CSS kan een media query en een selector niet in één regel combineren.) */
+  @media (prefers-reduced-motion: reduce) {
+    :root:not([data-motion="off"]) {
+      --beweging-snel: 80ms;  --beweging-standaard: 120ms; --beweging-intrede: 200ms; --beweging-stap: 0ms;
+      --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+      --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 1.6s;
+      --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+      --beweging-overlay: flex; --beweging-overlay-wacht: 500ms; --beweging-overlay-uit: 200ms;
+    }
+  }
+  /* ===== Modus "off": alles direct. Staatwijzigingen (kleur, focus, meldingen, laadtekst) blijven zichtbaar. ===== */
+  :root[data-motion="off"] {
+    --beweging-snel: 0ms;   --beweging-standaard: 0ms;   --beweging-intrede: 0ms;   --beweging-stap: 0ms;
+    --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+    --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 0s;
+    --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+    --beweging-overlay: none; --beweging-overlay-wacht: 0ms; --beweging-overlay-uit: 0ms;
+  }
+
+  /* ===== DONKER THEMA: alleen de tokens krijgen een andere waarde; onderdelen hoeven niets te weten ===== */
+  :root[data-thema="donker"] {
+    --kleur-achtergrond: #0E1524;
+    --kleur-oppervlak: #172134;
+    --kleur-oppervlak-zacht: #1D2940;
+    --kleur-rand: #2A3852;
+    --kleur-rand-veld: #5D6A84;          /* 3.3:1 op oppervlak */
+    --kleur-rand-veld-hover: #7A87A1;
+    --kleur-tekst: #E8EDF5;              /* 14:1 */
+    --kleur-tekst-zacht: #BAC5D8;        /* 9:1 */
+    --kleur-tekst-subtiel: #97A4BA;      /* 6.3:1 */
+    --kleur-icoon: #97A4BA;
+    --kleur-link: #82BCF2;               /* 7.6:1 */
+    --kleur-link-hover: #A9D1F7;
+    --kleur-blauw-focus: #82BCF2;
+    --kleur-lila: #222E46;
+    --kleur-fout: #FCA5A5;
+    --kleur-fout-achtergrond: #3A1E26;
+    --kleur-fout-rand: #7F2A35;
+    --kleur-waarschuwing: #F5C66B;
+    --kleur-skelet: #222E46;
+    --kleur-skelet-glans: #2B3954;
+    --kleur-lijn: #243048;
+    --kleur-balk-leeg: #2A3852;
+    --kleur-donkere-kaart: #101A2B;
+    --kleur-donkere-kaart-rand: #2A3852;
+    --kleur-actief-vlak: #2B5C96;             /* blauw i.p.v. navy: navy valt weg op een donkere kaart (wit erop 6.6:1) */
+    --schaduw-vlak: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+
+    --tint-blauw-bg: rgba(96,172,225,0.16);  --tint-blauw-tekst: #9CCBF5;
+    --tint-paars-bg: rgba(139,92,246,0.20);  --tint-paars-tekst: #C9B8FD;
+    --tint-groen-bg: rgba(16,185,129,0.18);  --tint-groen-tekst: #7EE2B8;
+    --tint-geel-bg: rgba(254,189,58,0.16);   --tint-geel-tekst: #F8CF72;
+    --tint-grijs-bg: #26324A;                --tint-grijs-tekst: #CBD5E1;
+    --tint-rood-bg: #3A1E26;                 --tint-rood-rand: #7F2A35;
+    color-scheme: dark;
+  }
+  /* Kleuren lopen zacht over als je wisselt (niet bij minder beweging: dan is de duur 0) */
+  :root.thema-wissel, :root.thema-wissel body, :root.thema-wissel body * {
+    transition: background-color var(--beweging-intrede) var(--ease-uit), border-color var(--beweging-intrede) var(--ease-uit),
+                color var(--beweging-intrede) var(--ease-uit) !important;
+  }
+
+  /* ===== Gedeelde animaties =====
+     Elementen zijn standaard zichtbaar; alleen het beginpunt van een animatie is doorzichtig.
+     Met duur 0ms springt een animatie direct naar het eindpunt, dus inhoud blijft nooit verborgen. */
+  @keyframes opkomen {
+    from { opacity: 0; transform: translate3d(0, var(--_afstand, var(--beweging-afstand)), 0); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes infaden { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes uitfaden { to { opacity: 0; visibility: hidden; } }
+  @keyframes draai { to { transform: rotate(360deg); } }
+  @keyframes vullen { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes schudden {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    15% { transform: translate3d(calc(var(--beweging-schud) * -1), 0, 0); }
+    30% { transform: translate3d(calc(var(--beweging-schud) * 0.8), 0, 0); }
+    45% { transform: translate3d(calc(var(--beweging-schud) * -0.6), 0, 0); }
+    60% { transform: translate3d(calc(var(--beweging-schud) * 0.4), 0, 0); }
+    75% { transform: translate3d(calc(var(--beweging-schud) * -0.2), 0, 0); }
+  }
+  @keyframes glans { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+
+  /* Binnenkomst. Volgorde met --i (0, 1, 2 ...); een pagina kan alles later laten starten met --start. */
+  .intrede {
+    animation: opkomen var(--beweging-intrede) var(--ease-uit)
+               calc(var(--start, 0ms) + var(--beweging-stap) * var(--i, 0)) both;
+  }
+  /* JavaScript zet deze klasse op een element om het één keer te laten trillen */
+  .schud { animation: schudden var(--beweging-schud-duur) var(--ease-in-uit) both; }
+
+  /* ===== Basis ===== */
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  /* Grote monitoren: alles schaalt een klein beetje mee (in %, dus de instelling van de gebruiker blijft gelden) */
+  @media (min-width: 1600px) and (min-height: 850px) { html { font-size: 106.25%; } } /* ± 17px */
+  @media (min-width: 2200px) and (min-height: 1100px) { html { font-size: 118.75%; } } /* ± 19px */
+  body {
+    margin: 0;
+    font-family: var(--font); font-size: var(--tekst-basis); line-height: 1.5;
+    color: var(--kleur-tekst); background: var(--kleur-achtergrond);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--font-mono); }
+  /* Het attribuut hidden wint altijd, ook van klassen als .knop (display: inline-flex) */
+  [hidden] { display: none !important; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ===== Knoppen ===== */
+  .knop {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--ruimte-2);
+    min-height: var(--hoogte-bediening); padding: var(--ruimte-2) var(--ruimte-5);
+    font-family: inherit; font-size: var(--tekst-basis); font-weight: 600; line-height: 1.2;
+    border: 0; border-radius: var(--radius); cursor: pointer; text-decoration: none;
+    transition:
+      background-color var(--beweging-snel) var(--ease-uit),
+      border-color var(--beweging-snel) var(--ease-uit),
+      color var(--beweging-snel) var(--ease-uit),
+      box-shadow var(--beweging-standaard) var(--ease-uit),
+      transform var(--beweging-snel) var(--ease-uit);
+  }
+  .knop:focus-visible { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 2px; }
+  .knop--primair {
+    background: var(--kleur-blauw); color: var(--kleur-knop-tekst);
+    box-shadow: 0 1px 2px rgba(21,35,58,0.08);
+  }
+  @media (hover: hover) {
+    .knop--primair:hover {
+      background: var(--kleur-blauw-donker); transform: translateY(var(--beweging-lift));
+      box-shadow: 0 6px 16px -6px rgba(31,111,194,0.5);
+    }
+  }
+  .knop--primair:active {
+    background: var(--kleur-blauw-donker); transform: scale(var(--beweging-druk));
+    box-shadow: inset 0 2px 0 rgba(11,26,48,0.2);
+  }
+  /* Secundair: wit met rand, voor minder belangrijke acties */
+  .knop--secundair {
+    background: var(--kleur-oppervlak); color: var(--kleur-tekst-zacht);
+    border: 1px solid var(--kleur-rand); font-size: var(--tekst-sm);
+  }
+  @media (hover: hover) {
+    .knop--secundair:hover { border-color: var(--kleur-rand-veld); color: var(--kleur-tekst); }
+  }
+  .knop--secundair:active { transform: scale(var(--beweging-druk)); }
+  .knop:disabled { background: #C9CDD8; color: #3E4658; cursor: not-allowed; box-shadow: none; transform: none; }
+  .knop--groot { min-height: var(--hoogte-bediening-groot); font-size: 1.0625rem; font-weight: 700; }
+  .knop--breed { width: 100%; }
+
+  /* Laadtoestand: tekst + spinner; geen lift meer */
+  .knop.laden,
+  .knop.laden:hover,
+  .knop.laden:active { background: var(--kleur-blauw-donker); cursor: progress; box-shadow: none; transform: none; }
+  .knop.laden .knop-tekst { animation: infaden var(--beweging-standaard) var(--ease-uit) both; }
+  .knop-spinner {
+    display: none; width: 1rem; height: 1rem; flex-shrink: 0; border-radius: 50%;
+    border: 2px solid rgba(11,26,48,0.25); border-top-color: var(--kleur-knop-tekst);
+    animation: draai var(--beweging-spinner) linear infinite;
+  }
+  .knop.laden .knop-spinner { display: inline-block; }
+  /* Modus "off": stilstaande ring; de knoptekst zegt al wat er gebeurt */
+  :root[data-motion="off"] .knop-spinner { border-color: var(--kleur-knop-tekst); border-right-color: transparent; }
+
+  /* ===== Skeleton (voor onderdelen die later via JavaScript laden) =====
+     Alleen gebruiken waar data echt asynchroon binnenkomt, NIET voor inhoud die Laravel al meestuurt.
+     Gebruik:
+       <section aria-busy="true" aria-describedby="...">
+         <span class="skelet skelet--tekst" style="width: 60%"></span>
+         <span class="skelet skelet--blok" style="height: 4.5rem"></span>
+       </section>
+     Zodra de data er is: skelet-elementen vervangen en aria-busy weghalen.
+     Glans staat stil in "reduced" en "off" (dan blijft het een rustig grijs vlak). */
+  .skelet {
+    display: block; border-radius: var(--radius-klein);
+    background: linear-gradient(90deg, var(--kleur-skelet) 0%, var(--kleur-skelet-glans) 50%, var(--kleur-skelet) 100%);
+    background-size: 200% 100%;
+    animation: glans 1.4s linear infinite;
+    animation-play-state: var(--beweging-sfeer);
+  }
+  .skelet--tekst { height: 0.875em; margin: 0.3em 0; }
+  .skelet--blok { height: 3rem; border-radius: var(--radius); }
+  .skelet--rond { border-radius: 50%; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens (licht + donker), bewegingsmodi, .intrede, .knop en .sr-only komen uit portaal.partials.basis.
+     De paginaopbouw (navigatiebalk, kop, kaarten) is dezelfde als op het dashboard. */
+  :root {
+    --rail-breedte: 4.5rem;
+    --rail-breedte-open: 14rem;
+    --inhoud-max: 72rem;
+    --inhoud-x: clamp(1rem, 0.5rem + 2.5vw, 2.5rem);
+    --inhoud-y: clamp(1.25rem, 4vh, 2.5rem);
+    --kaart-padding: clamp(1rem, 0.75rem + 0.8vw, 1.5rem);
+    --raster-gat: clamp(0.75rem, 0.5rem + 0.6vw, 1rem);
+    --tekst-titel: clamp(1.375rem, 1.2rem + 0.6vw, 1.75rem);
+  }
+
+  a { color: var(--kleur-link); text-decoration: none; }
+  p { margin: 0; }
+  .no-js .alleen-js { display: none !important; }
+
+  .sla-over {
+    position: absolute; left: var(--ruimte-3); top: var(--ruimte-3); z-index: 100;
+    padding: var(--ruimte-2) var(--ruimte-4); border-radius: var(--radius);
+    background: var(--kleur-oppervlak); color: var(--kleur-link); font-weight: 600;
+    transform: translateY(-200%);
+  }
+  .sla-over:focus { transform: none; outline: 3px solid var(--kleur-blauw-focus); outline-offset: 2px; }
+  .hoofdinhoud:focus { outline: none; }
+
+  /* ===== Paginaopbouw (zelfde als dashboard) ===== */
+  html { overflow-y: scroll; scrollbar-gutter: stable; }   /* scrollbalk altijd aanwezig: de pagina verschuift niet als hij verschijnt of verdwijnt (bijv. bij het openen van een menu) */
+  .pagina { overflow: clip; display: flex; min-height: 100vh; min-height: 100dvh; width: 100%; }
+  .rail {
+    position: sticky; top: 0; align-self: flex-start;
+    width: var(--rail-breedte); height: 100vh; height: 100dvh; flex-shrink: 0;
+    background: var(--kleur-navy); display: flex; flex-direction: column; padding: 0.875rem 0;
+    overflow-x: hidden; overflow-y: auto;
+    transition: width var(--beweging-standaard) var(--ease-uit);
+  }
+  .rail.expanded { width: var(--rail-breedte-open); }
+  .rail-label { display: none; white-space: nowrap; }
+  .rail.expanded .rail-label { display: block; }
+  .navitem { text-decoration: none; }
+  .gebruikerlink:hover { background: #1B2E4B; }
+  .rail a:focus-visible,
+  .rail button:focus-visible { outline: 2px solid var(--kleur-focus-op-navy); outline-offset: 2px; border-radius: var(--radius); }
+
+  .hoofdinhoud { flex: 1; min-width: 0; padding: var(--inhoud-y) var(--inhoud-x) calc(var(--inhoud-y) + 0.5rem); }
+  .hoofdinhoud-binnen { width: 100%; max-width: var(--inhoud-max); margin: 0 auto; container: begeleiding / inline-size; }
+
+  .pagina-kop {
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;
+    gap: var(--ruimte-4); margin-bottom: var(--ruimte-6);
+  }
+  .pagina-kop > div { min-width: 0; }
+  .pagina-datum { font-size: var(--tekst-sm); color: var(--kleur-tekst-subtiel); margin-bottom: var(--ruimte-1); }
+  .pagina-titel { margin: 0; font-size: var(--tekst-titel); line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+  @media (hover: hover) {
+    .header-uitlog:hover { background: var(--tint-rood-bg); border-color: var(--tint-rood-rand); color: var(--kleur-fout); }
+  }
+
+  .kaart {
+    min-width: 0;
+    background: var(--kleur-oppervlak); border: 1px solid var(--kleur-rand);
+    border-radius: var(--radius-groot); box-shadow: var(--schaduw-vlak);
+    padding: var(--kaart-padding);
+  }
+  .kaart-titel { margin: 0 0 var(--ruimte-4); font-size: 1.0625rem; line-height: 1.3; font-weight: 700; }
+  .kaart-titel .aantal { font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-tekst-subtiel); }
+  .hoofdinhoud a:focus-visible { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 2px; border-radius: 4px; }
+  .leeg { font-size: var(--tekst-sm); color: var(--kleur-tekst-subtiel); }
+  .lijst { list-style: none; margin: 0; padding: 0; }
+
+  /* ===== Opbouw ===== */
+  .raster { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--raster-gat); align-items: start; }
+  @container begeleiding (min-width: 54rem) { .raster { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); } }
+  .kolom { display: flex; flex-direction: column; gap: var(--raster-gat); min-width: 0; }
+
+  /* ===== Meldingen ===== */
+  .meldingen { display: flex; flex-direction: column; gap: var(--ruimte-2); margin-bottom: var(--raster-gat); }
+  .melding {
+    display: flex; align-items: flex-start; gap: var(--ruimte-2);
+    padding: var(--ruimte-3) var(--ruimte-4); border-radius: var(--radius);
+    font-size: var(--tekst-sm); font-weight: 600; line-height: 1.45;
+    animation: opkomen var(--beweging-intrede) var(--ease-uit) both;
+  }
+  .melding svg { flex-shrink: 0; margin-top: 1px; }
+  .melding--ok { background: var(--tint-groen-bg); color: var(--tint-groen-tekst); }
+  .melding--fout { background: var(--kleur-fout-achtergrond); color: var(--kleur-fout); border: 1px solid var(--kleur-fout-rand); }
+
+  /* ===== SLB'ers ===== */
+  .slb { display: flex; align-items: center; gap: var(--ruimte-3); min-width: 0; }
+  .slb + .slb { margin-top: var(--ruimte-3); }
+  .slb > div { min-width: 0; }
+  .avatar {
+    width: 2.5rem; height: 2.5rem; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+    background: #2F6FB8; color: #FFFFFF; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 600; font-size: var(--tekst-xs);
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .slb-naam { font-size: var(--tekst-label); font-weight: 600; }
+  .slb-mail { font-size: var(--tekst-klein); overflow-wrap: anywhere; }
+  .slb-mail:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* SLB'ers als uitklapmenu (<details>: werkt ook zonder JavaScript) */
+  .slb-menu > summary {
+    list-style: none; display: flex; align-items: center; gap: var(--ruimte-3); cursor: pointer; border-radius: var(--radius);
+  }
+  .slb-menu > summary::-webkit-details-marker { display: none; }
+  .slb-menu > summary:focus-visible { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 4px; }
+  .slb-menu .kaart-titel { margin: 0; flex: 1; min-width: 0; }
+  .slb-aantal { font-weight: 500; color: var(--kleur-tekst-subtiel); }
+  .slb-stapel { display: flex; flex-shrink: 0; transition: opacity var(--beweging-standaard) var(--ease-uit); }
+  .slb-stapel .avatar { width: 1.75rem; height: 1.75rem; font-size: 0.625rem; border: 2px solid var(--kleur-oppervlak); }
+  .slb-stapel .avatar + .avatar { margin-left: -0.3rem; }
+  .slb-menu[open] .slb-stapel { opacity: 0; }
+  .slb-chevron { flex-shrink: 0; color: var(--kleur-tekst-subtiel); transition: transform var(--beweging-standaard) var(--ease-uit); }
+  .slb-menu > summary:hover .slb-chevron { color: var(--kleur-tekst); }
+  .slb-menu[open] .slb-chevron { transform: rotate(180deg); }
+  .slb-menu[open] > .lijst { margin-top: var(--ruimte-4); padding-top: var(--ruimte-4); border-top: 1px solid var(--kleur-lijn); }
+  /* Vloeiend open- en dichtschuiven van de hoogte (moderne browsers; elders klapt het direct open) */
+  .slb-menu { interpolate-size: allow-keywords; }
+  .slb-menu::details-content {
+    block-size: 0; overflow: clip; opacity: 0;
+    transition: block-size 320ms var(--ease-uit), opacity 220ms var(--ease-uit), content-visibility 320ms allow-discrete;
+  }
+  .slb-menu[open]::details-content { block-size: auto; opacity: 1; }
+  .slb-menu[open] .lijst > .slb { animation: slbRij 360ms var(--ease-uit) backwards; }
+  .slb-menu[open] .lijst > .slb:nth-child(2) { animation-delay: 40ms; }
+  .slb-menu[open] .lijst > .slb:nth-child(3) { animation-delay: 80ms; }
+  .slb-menu[open] .lijst > .slb:nth-child(4) { animation-delay: 120ms; }
+  .slb-menu[open] .lijst > .slb:nth-child(5) { animation-delay: 160ms; }
+  @keyframes slbRij { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+  /* ===== Afspraken ===== */
+  .afspraken-kop { font-size: var(--tekst-sm); font-weight: 700; color: var(--kleur-tekst-subtiel); margin: var(--ruimte-5) 0 var(--ruimte-2); }
+  .afspraken-kop:first-of-type { margin-top: 0; }
+  .afspraak { display: flex; gap: var(--ruimte-3); padding: var(--ruimte-3) 0; border-top: 1px solid var(--kleur-lijn); }
+  .afspraak:first-child { border-top: 0; padding-top: 0; }
+  .datumtegel {
+    flex-shrink: 0; align-self: flex-start; width: 3.25rem; border-radius: var(--radius); text-align: center; padding: var(--ruimte-1) 0;
+    background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst); line-height: 1.15;
+  }
+  .datumtegel.grijs { background: var(--tint-grijs-bg); color: var(--tint-grijs-tekst); }
+  .datumtegel.groen { background: var(--tint-groen-bg); color: var(--tint-groen-tekst); }
+  .datumtegel .wd { font-size: var(--tekst-xs); font-weight: 600; }
+  .datumtegel .d { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .datumtegel .m { font-size: var(--tekst-xs); font-weight: 600; }
+  .afspraak-inhoud { flex: 1; min-width: 0; }
+  .afspraak-kop { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ruimte-1) var(--ruimte-2); }
+  .afspraak-titel { font-size: var(--tekst-label); font-weight: 700; }
+  .pil { font-size: var(--tekst-xs); font-weight: 700; padding: 1px var(--ruimte-2); border-radius: 999px; }
+  .pil.blauw { background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst); }
+  .pil.groen { background: var(--tint-groen-bg); color: var(--tint-groen-tekst); }
+  .pil.grijs { background: var(--tint-grijs-bg); color: var(--tint-grijs-tekst); }
+  .afspraak-meta { font-size: var(--tekst-sm); color: var(--kleur-tekst-subtiel); margin-top: 2px; overflow-wrap: anywhere; }
+  .afspraak-reden { font-size: var(--tekst-sm); color: var(--kleur-tekst-zacht); margin-top: var(--ruimte-2); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-line; }
+  .afspraak form { margin: var(--ruimte-2) 0 0; }
+  .knop--klein { min-height: 2.25rem; padding: var(--ruimte-1) var(--ruimte-3); font-size: var(--tekst-sm); }
+  .knop--gevaar { background: transparent; color: var(--kleur-fout); border: 1px solid var(--kleur-rand); }
+  @media (hover: hover) { .knop--gevaar:hover { background: var(--tint-rood-bg); border-color: var(--tint-rood-rand); } }
+  .eerder { margin-top: var(--ruimte-4); }
+  .eerder summary { cursor: pointer; font-size: var(--tekst-sm); font-weight: 700; color: var(--kleur-tekst-subtiel); padding: var(--ruimte-1) 0; }
+  .eerder summary:hover { color: var(--kleur-tekst); }
+  .eerder[open] summary { margin-bottom: var(--ruimte-2); }
+
+  /* ===== Gesprek aanvragen ===== */
+  .stap + .stap { margin-top: var(--ruimte-4); }
+  .stap-label { display: flex; align-items: center; gap: var(--ruimte-2); font-size: var(--tekst-label); font-weight: 700; margin-bottom: var(--ruimte-2); }
+  .stap-nr {
+    width: 1.5rem; height: 1.5rem; border-radius: 50%; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--kleur-lila); color: var(--kleur-tekst-zacht); font-family: var(--font-mono); font-size: var(--tekst-xs);
+    transition: background-color var(--beweging-standaard) var(--ease-uit), color var(--beweging-standaard) var(--ease-uit);
+  }
+  .stap.klaar .stap-nr { background: #10B981; color: #FFFFFF; }
+  .stap fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .stap legend { padding: 0; }
+
+  /* Kalender (wordt door JavaScript getekend) */
+  .kal-kop { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--ruimte-1); }
+  .kal-maand { font-weight: 700; }
+  .kal-nav {
+    width: 2rem; height: 2rem; border-radius: var(--radius); border: 1px solid var(--kleur-rand);
+    background: var(--kleur-oppervlak); color: var(--kleur-tekst-zacht); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .kal-nav:hover:not(:disabled) { border-color: var(--kleur-rand-veld); color: var(--kleur-tekst); }
+  .kal-nav:disabled { opacity: 0.35; cursor: default; }
+  .kal-nav:focus-visible { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 1px; }
+  .kal-raster { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+  .kal-week { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--ruimte-2); }
+  .kal-week .kal-dag {
+    height: auto; padding: var(--ruimte-3) 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    border: 1px solid var(--kleur-rand); border-radius: var(--radius-groot); background: var(--kleur-oppervlak);
+  }
+  .kal-week .kal-dag small { font-size: var(--tekst-xs); font-weight: 600; color: var(--kleur-tekst-subtiel); }
+  .kal-week .kal-dag span { font-size: 1.375rem; font-weight: 700; line-height: 1.2; }
+  .kal-week .kal-dag.vandaag { box-shadow: none; border-color: var(--kleur-rand-veld); }
+  .kal-week .kal-dag[aria-pressed="true"], .kal-week .kal-dag[aria-pressed="true"]:hover { border-color: var(--kleur-actief-vlak); }
+  .kal-week .kal-dag[aria-pressed="true"] small { color: rgba(255,255,255,0.8); }
+  .kal-week .kal-dag.heeft-afspraak::after { bottom: 5px; }
+  .kal-week .kal-dag:disabled { opacity: 0.4; }
+  .kal-kop { margin-bottom: var(--ruimte-3); }
+  .kal-wd { text-align: center; font-size: var(--tekst-xs); font-weight: 600; color: var(--kleur-tekst-subtiel); padding-bottom: 2px; }
+  .kal-dag {
+    position: relative; height: 2.125rem; border: 0; border-radius: var(--radius);
+    background: transparent; color: var(--kleur-tekst); font: inherit; font-size: var(--tekst-sm); font-weight: 600;
+    cursor: pointer; font-variant-numeric: tabular-nums;
+    transition: background-color var(--beweging-snel) var(--ease-uit), color var(--beweging-snel) var(--ease-uit);
+  }
+  @media (hover: hover) { .kal-dag:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--kleur-oppervlak-zacht); } }
+  .kal-dag:disabled { color: var(--kleur-tekst-subtiel); opacity: 0.45; cursor: default; font-weight: 500; }
+  .kal-dag.vandaag { box-shadow: inset 0 0 0 1.5px var(--kleur-rand-veld); }
+  .kal-dag.heeft-afspraak::after {        /* stip: op deze dag heb je al een gesprek */
+    content: ""; position: absolute; left: 50%; bottom: 2px; width: 4px; height: 4px; margin-left: -2px;
+    border-radius: 50%; background: var(--kleur-blauw-donker);
+  }
+  .kal-dag[aria-pressed="true"], .kal-dag[aria-pressed="true"]:hover { background: var(--kleur-actief-vlak); color: #FFFFFF; }
+  .kal-dag[aria-pressed="true"]::after { background: #FFFFFF; }
+  .kal-dag:focus-visible { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 1px; }
+  .kal-legenda { display: flex; flex-wrap: wrap; gap: var(--ruimte-1) var(--ruimte-4); margin-top: var(--ruimte-1); font-size: var(--tekst-xs); color: var(--kleur-tekst-subtiel); }
+  .kal-legenda span { display: inline-flex; align-items: center; gap: var(--ruimte-1); }
+  .kal-legenda i { width: 6px; height: 6px; border-radius: 50%; background: var(--kleur-blauw-donker); display: inline-block; }
+
+  /* Keuzechips (tijd en onderwerp): echte radioknoppen, dus het werkt ook zonder JavaScript */
+  .chips { display: flex; flex-wrap: wrap; gap: var(--ruimte-1) var(--ruimte-2); }
+  .chip input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .chip span {
+    display: flex; align-items: center; justify-content: center; min-height: 2.125rem; padding: 0 var(--ruimte-3);
+    border: 1px solid var(--kleur-rand); border-radius: 999px; background: var(--kleur-oppervlak);
+    font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-tekst-zacht); cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    transition: background-color var(--beweging-snel) var(--ease-uit), border-color var(--beweging-snel) var(--ease-uit), color var(--beweging-snel) var(--ease-uit);
+  }
+  .chip span:hover { border-color: var(--kleur-rand-veld); color: var(--kleur-tekst); }
+  .chip input:checked + span { background: var(--kleur-actief-vlak); border-color: var(--kleur-actief-vlak); color: #FFFFFF; }
+  .chip input:focus-visible + span { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 1px; }
+  .chip input:disabled + span { opacity: 0.4; cursor: default; text-decoration: line-through; }
+  /* Tijdkeuze: eigen uitklapmenu. De echte radioknoppen (name="tijd") blijven bestaan; zonder JavaScript staat de lijst gewoon open. */
+  .tk { position: relative; --tk-accent: #213A5E; }
+  :root[data-thema="donker"] .tk { --tk-accent: var(--kleur-actief-vlak); }
+  .tk-knop { display: none; }
+  .tk-lijst { display: grid; gap: 2px; margin: 0; padding: var(--ruimte-1); }
+  .tk--js .tk-knop {
+    display: flex; align-items: center; gap: var(--ruimte-3); width: 100%; min-height: 2.75rem; padding: 0 var(--ruimte-3);
+    border: 1px solid var(--kleur-rand-veld); border-radius: var(--radius-groot); background: var(--kleur-oppervlak);
+    color: var(--kleur-tekst); font: inherit; font-size: var(--tekst-sm); font-weight: 600; text-align: left; cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    transition: border-color var(--beweging-snel) var(--ease-uit), box-shadow var(--beweging-standaard) var(--ease-uit);
+  }
+  .tk--js .tk-knop:hover:not(:disabled) { border-color: var(--kleur-rand-veld-hover); }
+  .tk--js .tk-knop:disabled { cursor: not-allowed; background: var(--kleur-oppervlak-zacht); border-color: var(--kleur-rand); }
+  .tk--js .tk-knop:disabled .tk-icoon, .tk--js .tk-knop:disabled .tk-chevron { opacity: 0.5; }
+  .tk--js .tk-knop:focus-visible { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 1px; }
+  .tk--js .tk-knop[aria-expanded="true"] { border-color: var(--tk-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tk-accent) 18%, transparent); }
+  .tk-icoon, .tk-chevron { flex-shrink: 0; display: block; color: var(--kleur-tekst-subtiel); }
+  .tk-waarde { flex: 1; min-width: 0; }
+  .tk-waarde.leeg { font-weight: 500; color: var(--kleur-tekst-subtiel); }
+  .tk-chevron { transition: transform var(--beweging-standaard) var(--ease-uit); }
+  .tk--js .tk-knop[aria-expanded="true"] .tk-chevron { transform: rotate(180deg); }
+  .tk--js .tk-paneel {
+    position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px);
+    max-height: min(14rem, 55vh); overflow-y: auto; overscroll-behavior: contain;
+    background: var(--kleur-oppervlak); border: 1px solid var(--kleur-rand); border-radius: var(--radius-groot);
+    box-shadow: 0 12px 32px -8px rgba(21,35,58,0.22), 0 2px 6px rgba(21,35,58,0.08);
+    opacity: 0; visibility: hidden; transform: translateY(-6px) scale(0.98); transform-origin: top center;
+    transition: opacity var(--beweging-standaard) var(--ease-uit), transform var(--beweging-standaard) var(--ease-uit), visibility 0s linear var(--beweging-standaard);
+  }
+  :root[data-thema="donker"] .tk--js .tk-paneel { box-shadow: 0 12px 32px -8px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.35); }
+  .tk--js .tk-paneel.omhoog { top: auto; bottom: calc(100% + 6px); transform: translateY(6px) scale(0.98); transform-origin: bottom center; }
+  .tk--js .tk-paneel.open, .tk--js .tk-paneel.omhoog.open { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+  .tk-optie input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .tk-optie span {
+    display: flex; align-items: center; justify-content: space-between; min-height: 2.5rem; padding: 0 var(--ruimte-3);
+    border-radius: var(--radius); color: var(--kleur-tekst-zacht); font-size: var(--tekst-sm); font-weight: 500; cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    transition: background-color var(--beweging-snel) var(--ease-uit), color var(--beweging-snel) var(--ease-uit);
+  }
+  .tk-optie span::after {
+    content: ""; width: 1rem; height: 1rem; flex-shrink: 0; opacity: 0; background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.8'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.8'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  .tk-optie span:hover { background: var(--kleur-oppervlak-zacht); color: var(--kleur-tekst); }
+  .tk-optie input:checked + span { background: var(--tk-accent); color: #FFFFFF; font-weight: 600; }
+  .tk-optie input:checked + span::after { opacity: 1; }
+  .tk-optie input:focus-visible + span { outline: 2px solid var(--kleur-blauw-focus); outline-offset: -2px; }
+  .tk-optie input:disabled + span { opacity: 0.4; cursor: default; text-decoration: line-through; background: transparent; }
+  @media (max-width: 30rem) { .tk--js .tk-optie span { min-height: 2.75rem; } }
+  /* ===== Aanvraag als stappenplan: één vraag per scherm ===== */
+  :root { --tk-navy: #213A5E; }
+  :root[data-thema="donker"] { --tk-navy: var(--kleur-actief-vlak); }
+  .wiz-kop { margin: 0 0 var(--ruimte-3); }
+  .wiz-teller { margin: 0 0 var(--ruimte-1); font-size: var(--tekst-xs); font-weight: 600; color: var(--kleur-tekst-subtiel); }
+  .wiz-balk { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .wiz-seg { position: relative; display: block; width: 100%; height: 1.25rem; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: var(--radius-klein); }
+  .wiz-seg::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 999px;
+    background: var(--kleur-rand); transition: background-color var(--beweging-standaard) var(--ease-uit);
+  }
+  .wiz-seg.klaar::before { background: #10B981; }
+  .wiz-seg[aria-current="step"]::before { background: var(--tk-navy); }
+  .wiz-seg:disabled { cursor: default; }
+  .wiz-seg:focus-visible { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 1px; }
+  .wiz--js .stap-nr { display: none; }
+  .wiz--js .stap + .stap { margin-top: 0; }
+  .wiz--js .stap-label { font-size: 1.0625rem; margin-bottom: var(--ruimte-3); }
+  .stap[hidden], .voet-knoppen [hidden], #samenvatting[hidden], #hintSlb[hidden] { display: none !important; }
+  .stap.fase-in { animation: faseIn 260ms var(--ease-uit) both; }
+  @keyframes faseIn { from { opacity: 0; transform: translateX(var(--fase-van, 14px)); } to { opacity: 1; transform: none; } }
+  .voet-knoppen { display: flex; flex-wrap: wrap; gap: var(--ruimte-2); margin-top: var(--ruimte-3); }
+  .voet-knoppen .knop { flex: 1 1 auto; }
+  .voet-knoppen .verzend, .voet-knoppen #verderKnop { flex: 2 1 10rem; }
+  @media (prefers-reduced-motion: reduce) {
+    .stap.fase-in { animation: none; }
+    .slb-menu::details-content { transition: none; }
+    .slb-menu[open] .lijst > .slb { animation: none; }
+  }
+  .stap-hint { font-size: var(--tekst-klein); color: var(--kleur-tekst-subtiel); margin-top: var(--ruimte-2); }
+
+  .veld-invoer {
+    display: block; width: 100%; padding: var(--ruimte-2) var(--ruimte-3); min-height: 3.5rem; resize: none;
+    font-family: inherit; font-size: var(--tekst-veld); line-height: 1.5; color: var(--kleur-tekst);
+    background: var(--kleur-oppervlak); border: 1px solid var(--kleur-rand-veld); border-radius: var(--radius);
+  }
+  textarea.veld-invoer { height: 5.5rem; min-height: 0; resize: none; overflow-y: auto; }   /* vaste grootte: bij veel tekst scrolt het veld zelf */
+  input.veld-invoer { min-height: var(--hoogte-bediening); padding: 0 var(--ruimte-3); }
+  .veld-invoer:hover { border-color: var(--kleur-rand-veld-hover); }
+  .veld-invoer:focus { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 1px; border-color: var(--kleur-blauw-focus); }
+  .veld-invoer[aria-invalid="true"] { border-color: var(--kleur-fout); box-shadow: inset 0 0 0 1px var(--kleur-fout); }
+  .teller { text-align: right; font-size: var(--tekst-xs); color: var(--kleur-tekst-subtiel); margin-top: var(--ruimte-1); font-variant-numeric: tabular-nums; }
+  .veld-fout { display: flex; gap: var(--ruimte-2); margin-top: var(--ruimte-2); font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-fout); }
+  .veld-fout[hidden] { display: none; }
+
+  .samenvatting {
+    margin-top: var(--ruimte-4); padding: var(--ruimte-2) var(--ruimte-3); border-radius: var(--radius);
+    background: var(--kleur-oppervlak-zacht); font-size: var(--tekst-sm); color: var(--kleur-tekst-zacht); line-height: 1.5;
+  }
+  .samenvatting b { color: var(--kleur-tekst); }
+  .verzend { margin-top: 0; }
+
+  /* ===== Bevestigen bij annuleren: het ingebouwde <dialog>-element ===== */
+  dialog.bevestig {
+    width: min(26rem, calc(100vw - 2rem)); padding: var(--ruimte-6); border: 1px solid var(--kleur-rand);
+    border-radius: var(--radius-groot); background: var(--kleur-oppervlak); color: var(--kleur-tekst);
+    box-shadow: 0 20px 50px -12px rgba(0,0,0,0.35);
+  }
+  dialog.bevestig::backdrop { background: rgba(11,17,29,0.5); }
+  dialog.bevestig[open] { animation: opkomen var(--beweging-intrede) var(--ease-uit) both; }
+  .bevestig h2 { margin: 0 0 var(--ruimte-2); font-size: 1.125rem; }
+  .bevestig p { color: var(--kleur-tekst-zacht); font-size: var(--tekst-sm); line-height: 1.5; }
+  .bevestig-knoppen { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ruimte-2); margin-top: var(--ruimte-6); }
+  .knop--rood { background: #B91C1C; color: #FFFFFF; }
+  .knop--rood:hover { background: #991B1B; }
+
+  /* ===== Telefoon: navigatie onderaan (zelfde als dashboard) ===== */
+  @media (max-width: 720px) {
+    .pagina { display: block; }
+    .rail, .rail.expanded {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100% !important;
+      height: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+      flex-direction: row; align-items: center; padding: 0 6px env(safe-area-inset-bottom, 0px); z-index: 60;
+      border-top: 1px solid #22385A; transition: none; overflow: visible;
+    }
+    .rail > div:first-child, .rail > button { display: none !important; }
+    .rail > div:nth-of-type(2) { flex: 1; flex-direction: row !important; justify-content: space-around; padding: 0 !important; gap: 0 !important; }
+    .rail > div:nth-of-type(2) .navitem { padding: 12px 13px !important; box-shadow: none !important; }
+    .rail > div:nth-of-type(2) .navitem[style*="background: #213A5E"],
+    .rail > div:nth-of-type(2) .navitem[aria-current="page"] { box-shadow: inset 0 -3px 0 #FEBD3A !important; border-radius: 8px 8px 0 0 !important; }
+    .rail > div:nth-of-type(3) { margin-top: 0 !important; padding: 0 4px !important; }
+    .rail-label, .rail.expanded .rail-label { display: none !important; }
+    .hoofdinhoud { padding: var(--ruimte-4) var(--ruimte-4) calc(5.25rem + env(safe-area-inset-bottom, 0px)); }
+  }
+</style>
+</head>
+<body>
+<div id="demo-balk" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#FEF3C7;color:#92400E;font:600 13px/1.4 system-ui,sans-serif;padding:6px 12px;text-align:center">Demo: dit is een vaste weergave van de student-omgeving. Wijzigingen worden niet opgeslagen.</div>
+<script>
+document.addEventListener('submit',function(e){e.preventDefault();var b=document.getElementById('demo-balk');if(b){b.style.background='#FBC6CA';b.textContent='Dit is een demo: hier kan niets worden opgeslagen.';setTimeout(function(){b.style.background='#FEF3C7';b.textContent='Demo: dit is een vaste weergave van de student-omgeving. Wijzigingen worden niet opgeslagen.'},2500)}},true);
+</script>
+<style>body{padding-top:30px}</style>
+
+
+<a href="#inhoud" class="sla-over">Naar de inhoud</a>
+
+
+<div class="pagina">
+
+  <!-- ===== Navigatierail (inklapbaar) ===== -->
+  <div class="rail" id="navRail">
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 14px; margin-bottom: 20px; min-width: 0">
+      <svg width="30" height="30" viewBox="0 0 104 104" style="flex-shrink:0;display:block" aria-hidden="true"><rect x="4" y="4" width="96" height="96" rx="18" fill="#3F8CDD" stroke="#1C2340" stroke-width="4"/><rect x="20" y="58" width="16" height="26" rx="3" fill="#F1EBF7" stroke="#1C2340" stroke-width="3.5"/><rect x="42" y="44" width="16" height="40" rx="3" fill="#FEBD3A" stroke="#1C2340" stroke-width="3.5"/><rect x="64" y="28" width="16" height="56" rx="3" fill="#F66169" stroke="#1C2340" stroke-width="3.5"/></svg>
+      <div class="rail-label" style="font-weight: 700; color: #FFFFFF; font-size: 13px; overflow: hidden">ITIG Portal</div>
+    </div>
+
+    <button id="navToggle" aria-label="Menu in- of uitklappen" style="margin: 0 14px 18px; width: 28px; height: 28px; border-radius: 7px; border: 1px solid #2B4A75; background: transparent; color: #86A9D6; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+    </button>
+
+    <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 10px">
+                                  <a href="index.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Dashboard</span>
+          </a>
+                                          <a href="leeruitkomsten.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z"></path><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"></path></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Leeruitkomsten</span>
+          </a>
+                                          <a href="leerdoelen.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Leerdoelen</span>
+          </a>
+                                          <a href="begeleiding.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; background: #213A5E; box-shadow: inset 3px 0 0 #FEBD3A;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span class="rail-label" style="color: #FFFFFF; font-size: 12.5px; font-weight: 600">Student-docentrelatie</span>
+          </a>
+                                          <a href="feedback.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Feedback</span>
+          </a>
+                  </div>
+
+    <!-- Profiel: wie er ingelogd is. Uitloggen zelf staat nu ook bovenaan de pagina. -->
+    <div style="margin-top: auto; padding: 0 10px">
+            <a  href="profiel.html" title="Mijn profiel"  class="navitem gebruikerlink" style="display: flex; align-items: center; gap: 9px; padding: 6px 4px; min-width: 0; border-radius: 8px; ">
+                  <div style="width: 28px; height: 28px; border-radius: 50%; background: #60ACE1; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: #0E2240; font-size: 10.5px; flex-shrink: 0">JM</div>
+                <div class="rail-label" style="overflow: hidden">
+          <div style="color: #FFFFFF; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Jair Modiwirijo</div>
+          <div style="color: #7F9AC0; font-size: 10.5px; white-space: nowrap">Student</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+
+  <main class="hoofdinhoud" id="inhoud" tabindex="-1">
+  <div class="hoofdinhoud-binnen">
+
+    <header class="pagina-kop intrede" style="--i:0">
+      <div>
+        <p class="pagina-datum">30 okt 2026</p>
+        <h1 class="pagina-titel">Student-docentrelatie</h1>
+      </div>
+      <form method="POST" action="#" style="margin: 0">
+<input type="hidden" name="_token" value="" autocomplete="off">        <button type="submit" class="knop knop--secundair header-uitlog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Uitloggen
+        </button>
+      </form>
+    </header>
+
+    
+    <div class="raster">
+
+      <!-- ===== Links: SLB'ers en afspraken ===== -->
+      <div class="kolom">
+
+        <section class="kaart intrede" style="--i:1" aria-labelledby="titel-slb">
+                      <details class="slb-menu" >
+              <summary>
+                <h2 class="kaart-titel" id="titel-slb">Jouw SLB'ers <span class="slb-aantal">· 6</span></h2>
+                <span class="slb-stapel" aria-hidden="true">
+                                                          <span class="avatar">BA</span>
+                                                          <span class="avatar">GP</span>
+                                                          <span class="avatar">JM</span>
+                                  </span>
+                <svg class="slb-chevron" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5l5 5 5-5"/></svg>
+              </summary>
+              <ul class="lijst">
+                                                    <li class="slb">
+                    <span class="avatar" aria-hidden="true">BA</span>
+                    <div>
+                      <p class="slb-naam">Bert Annink</p>
+                      <a class="slb-mail" href="mailto:bert.annink@itig.nl">bert.annink@itig.nl</a>
+                    </div>
+                  </li>
+                                                    <li class="slb">
+                    <span class="avatar" aria-hidden="true">GP</span>
+                    <div>
+                      <p class="slb-naam">Guus Pjekman</p>
+                      <a class="slb-mail" href="mailto:guus.pjekman@itig.nl">guus.pjekman@itig.nl</a>
+                    </div>
+                  </li>
+                                                    <li class="slb">
+                    <span class="avatar" aria-hidden="true">JM</span>
+                    <div>
+                      <p class="slb-naam">Jair Modiwirijo</p>
+                      <a class="slb-mail" href="mailto:jair.modiwirijo@itig.nl">jair.modiwirijo@itig.nl</a>
+                    </div>
+                  </li>
+                                                    <li class="slb">
+                    <span class="avatar" aria-hidden="true">JM</span>
+                    <div>
+                      <p class="slb-naam">Jair Modiwirijo</p>
+                      <a class="slb-mail" href="mailto:jair.slber@itig.nl">jair.slber@itig.nl</a>
+                    </div>
+                  </li>
+                                                    <li class="slb">
+                    <span class="avatar" aria-hidden="true">LB</span>
+                    <div>
+                      <p class="slb-naam">Lambert Bruin</p>
+                      <a class="slb-mail" href="mailto:lambert.bruin@itig.nl">lambert.bruin@itig.nl</a>
+                    </div>
+                  </li>
+                                                    <li class="slb">
+                    <span class="avatar" aria-hidden="true">RP</span>
+                    <div>
+                      <p class="slb-naam">Renee Postman</p>
+                      <a class="slb-mail" href="mailto:renee.postman@itig.nl">renee.postman@itig.nl</a>
+                    </div>
+                  </li>
+                              </ul>
+            </details>
+                  </section>
+
+        <section class="kaart intrede" style="--i:2" aria-labelledby="titel-afspraken">
+          <h2 class="kaart-titel" id="titel-afspraken">Mijn afspraken <span class="aantal">· 0 gepland</span></h2>
+
+                      <p class="leeg">Nog geen afspraken. Vraag hiernaast je eerste gesprek aan.</p>
+          
+          
+                  </section>
+      </div>
+
+      <!-- ===== Rechts: gesprek aanvragen ===== -->
+      <section class="kaart intrede" style="--i:3" aria-labelledby="titel-aanvragen">
+        <h2 class="kaart-titel" id="titel-aanvragen">Gesprek aanvragen</h2>
+
+                <form method="POST" action="/begeleiding" novalidate id="aanvraagForm">
+<input type="hidden" name="_token" value="" autocomplete="off">          <input type="hidden" name="actie" value="afspraak_aanvragen">
+
+          
+          <div class="wiz-kop alleen-js">
+            <p class="wiz-teller" id="wizTeller" aria-live="polite">Stap 1 van 4 · Dag</p>
+            <ol class="wiz-balk" aria-label="Voortgang van de aanvraag">
+              <li><button type="button" class="wiz-seg" data-stap="1" aria-label="Stap 1: dag"></button></li>
+              <li><button type="button" class="wiz-seg" data-stap="2" aria-label="Stap 2: tijd" disabled></button></li>
+              <li><button type="button" class="wiz-seg" data-stap="3" aria-label="Stap 3: type gesprek" disabled></button></li>
+              <li><button type="button" class="wiz-seg" data-stap="4" aria-label="Stap 4: reden" disabled></button></li>
+            </ol>
+          </div>
+
+          <div class="wiz-body" id="wizBody">
+
+          
+          <div class="stap" id="stapDag">
+            <p class="stap-label" id="labelDag"><span class="stap-nr" aria-hidden="true">1</span>Kies een dag</p>
+            <input type="hidden" name="datum" id="datumVeld" value="" class="alleen-js">
+            <div class="alleen-js" id="kalender" aria-labelledby="labelDag"></div>
+            <noscript>
+              <input class="veld-invoer" type="date" name="datum" min="2026-10-30" value="" aria-labelledby="labelDag">
+            </noscript>
+            <p class="veld-fout" id="fout-datum" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Kies een dag in de kalender.</span></p>
+          </div>
+
+          
+          <div class="stap" id="stapTijd">
+            <fieldset>
+              <legend class="stap-label"><span class="stap-nr" aria-hidden="true">2</span>Kies een tijd</legend>
+              <div class="tk" id="tijdKeuze">
+                <button type="button" class="tk-knop" id="tijdKnop" aria-expanded="false" aria-controls="tijdPaneel">
+                  <svg class="tk-icoon" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.8V10l2.8 1.8"/></svg>
+                  <span class="tk-waarde leeg" id="tijdWaarde">Kies een tijd</span>
+                  <svg class="tk-chevron" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5l5 5 5-5"/></svg>
+                </button>
+                <div class="tk-paneel" id="tijdPaneel">
+                  <div class="tk-lijst">
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="08:30" ><span>08:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="09:00" ><span>09:00</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="09:30" ><span>09:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="10:00" ><span>10:00</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="10:30" ><span>10:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="11:00" ><span>11:00</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="11:30" ><span>11:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="12:00" ><span>12:00</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="12:30" ><span>12:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="13:00" ><span>13:00</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="13:30" ><span>13:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="14:00" ><span>14:00</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="14:30" ><span>14:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="15:00" ><span>15:00</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="15:30" ><span>15:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="16:00" ><span>16:00</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="16:30" ><span>16:30</span></label>
+                                          <label class="tk-optie"><input type="radio" name="tijd" value="17:00" ><span>17:00</span></label>
+                                      </div>
+                </div>
+              </div>
+            </fieldset>
+            <p class="veld-fout" id="fout-tijd" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Kies een tijd.</span></p>
+          </div>
+
+          
+          <div class="stap klaar" id="stapOnderwerp">
+            <fieldset>
+              <legend class="stap-label"><span class="stap-nr" aria-hidden="true">3</span>Wat voor type gesprek?</legend>
+              <div class="chips">
+                                  <label class="chip"><input type="radio" name="onderwerp" value="SLB-gesprek" checked><span>SLB-gesprek</span></label>
+                                  <label class="chip"><input type="radio" name="onderwerp" value="Voortgangsgesprek" ><span>Voortgangsgesprek</span></label>
+                                  <label class="chip"><input type="radio" name="onderwerp" value="Opdrachtgesprek" ><span>Opdrachtgesprek</span></label>
+                              </div>
+            </fieldset>
+          </div>
+
+          
+          <div class="stap" id="stapReden">
+            <label class="stap-label" for="reden"><span class="stap-nr" aria-hidden="true">4</span>Reden</label>
+            <textarea class="veld-invoer" id="reden" name="reden" rows="3" style="resize: none; height: 5.5rem;" maxlength="1000" aria-describedby="redenHint fout-reden"
+                      placeholder="Waar wil je het over hebben? Wat heb je al voorbereid?"></textarea>
+            <div class="teller" id="redenHint" aria-live="polite"><span id="teller">0</span> / 1000</div>
+            <p class="veld-fout" id="fout-reden" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Vul een reden in: de reden is verplicht.</span></p>
+          </div>
+
+          </div>
+
+          <p class="samenvatting alleen-js" id="samenvatting" aria-live="polite">Kies een dag en een tijd.</p>
+          <p class="stap-hint" id="hintSlb">Het gesprek gaat naar: Bert Annink, Guus Pjekman, Jair Modiwirijo, Jair Modiwirijo, Lambert Bruin, Renee Postman</p>
+
+          <div class="voet-knoppen">
+            <button type="button" class="knop knop--secundair alleen-js" id="terugKnop" hidden>Terug</button>
+            <button type="button" class="knop knop--primair alleen-js" id="verderKnop" disabled>Volgende</button>
+            <button type="submit" class="knop knop--primair verzend" id="verzendKnop">Gesprek aanvragen</button>
+          </div>
+        </form>
+              </section>
+
+    </div>
+
+  </div>
+  </main>
+</div>
+
+
+<dialog class="bevestig" id="annuleerDialog" aria-labelledby="annuleerTitel" aria-describedby="annuleerTekst">
+  <h2 id="annuleerTitel">Gesprek annuleren?</h2>
+  <p id="annuleerTekst">Je kunt dit niet ongedaan maken.</p>
+  <div class="bevestig-knoppen">
+    <button type="button" class="knop knop--secundair" id="annuleerNee">Nee, houden</button>
+    <button type="button" class="knop knop--rood" id="annuleerJa">Ja, annuleren</button>
+  </div>
+</dialog>
+
+<script>
+  /* ---------- Kalender + samenvatting (zonder herladen van maand wisselen) ---------- */
+  (function () {
+    var houder = document.getElementById('kalender');
+    var form = document.getElementById('aanvraagForm');
+    if (!houder || !form) return;
+
+    var MAANDEN = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+    var DAGEN = ['maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag','zondag'];
+    var KORT = ['ma','di','wo','do','vr','za','zo'];
+    var afspraakDagen = [];
+    var vandaagIso = "2026-10-30";
+    var datumVeld = document.getElementById('datumVeld');
+    var gekozen = datumVeld.value || null;
+
+    function maakDatum(iso) { var p = iso.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+    function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    function weekdag(d) { return (d.getDay() + 6) % 7; }   // maandag = 0
+    function mooi(isoDatum) { var d = maakDatum(isoDatum); return DAGEN[weekdag(d)] + ' ' + d.getDate() + ' ' + MAANDEN[d.getMonth()]; }
+
+    var vandaag = maakDatum(vandaagIso);
+    // De dagkeuze is een weekstrook met alleen werkdagen (ma t/m vr). In het weekend zijn er geen gesprekken.
+    function maandagVan(d) { var m = new Date(d); m.setDate(m.getDate() - weekdag(m)); return m; }
+    var start = gekozen ? maakDatum(gekozen) : new Date(vandaag);
+    if (weekdag(start) > 4) start.setDate(start.getDate() + (7 - weekdag(start)));   // zaterdag/zondag: begin bij maandag
+    var weekStart = maandagVan(start);
+    var eersteWeek = maandagVan(weekdag(vandaag) > 4 ? new Date(vandaag.getFullYear(), vandaag.getMonth(), vandaag.getDate() + (7 - weekdag(vandaag))) : vandaag);
+    var CHEV_L = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+    var CHEV_R = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+
+    function weekTitel() {
+      var vrij = new Date(weekStart); vrij.setDate(vrij.getDate() + 4);
+      return weekStart.getMonth() === vrij.getMonth()
+        ? weekStart.getDate() + ' t/m ' + vrij.getDate() + ' ' + MAANDEN[vrij.getMonth()]
+        : weekStart.getDate() + ' ' + MAANDEN[weekStart.getMonth()] + ' t/m ' + vrij.getDate() + ' ' + MAANDEN[vrij.getMonth()];
+    }
+
+    function teken() {
+      var html = '<div class="kal-kop">'
+        + '<button type="button" class="kal-nav" data-stap="-1" aria-label="Vorige week"' + (weekStart <= eersteWeek ? ' disabled' : '') + '>' + CHEV_L + '</button>'
+        + '<span class="kal-maand" aria-live="polite">' + weekTitel() + '</span>'
+        + '<button type="button" class="kal-nav" data-stap="1" aria-label="Volgende week">' + CHEV_R + '</button>'
+        + '</div><div class="kal-week">';
+      for (var i = 0; i < 5; i++) {
+        var d = new Date(weekStart); d.setDate(d.getDate() + i);
+        var dIso = iso(d);
+        var verleden = d < vandaag, heeft = afspraakDagen.indexOf(dIso) > -1;
+        var klassen = 'kal-dag' + (dIso === vandaagIso ? ' vandaag' : '') + (heeft ? ' heeft-afspraak' : '');
+        var label = mooi(dIso) + (dIso === vandaagIso ? ', vandaag' : '') + (heeft ? ', je hebt al een gesprek' : '') + (verleden ? ', voorbij' : '');
+        html += '<button type="button" class="' + klassen + '" data-datum="' + dIso + '" aria-label="' + label + '"'
+          + ' aria-pressed="' + (dIso === gekozen ? 'true' : 'false') + '"' + (verleden ? ' disabled' : '') + '>'
+          + '<small aria-hidden="true">' + KORT[i] + '</small><span aria-hidden="true">' + d.getDate() + '</span></button>';
+      }
+      html += '</div><p class="kal-legenda"><span><i aria-hidden="true"></i>Je hebt al een gesprek</span><span>Alleen werkdagen</span></p>';
+      houder.innerHTML = html;
+    }
+
+    houder.addEventListener('click', function (e) {
+      var nav = e.target.closest('.kal-nav');
+      if (nav && !nav.disabled) {
+        weekStart.setDate(weekStart.getDate() + 7 * Number(nav.dataset.stap));
+        teken();
+        houder.querySelector('.kal-nav[data-stap="' + nav.dataset.stap + '"]').focus();
+        return;
+      }
+      var knop = e.target.closest('.kal-dag');
+      if (!knop || knop.disabled) return;
+      gekozen = knop.dataset.datum;
+      datumVeld.value = gekozen;
+      houder.querySelectorAll('.kal-dag[aria-pressed="true"]').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+      knop.setAttribute('aria-pressed', 'true');
+      document.getElementById('fout-datum').hidden = true;
+      werkBij();
+    });
+
+    // Tijden van vandaag die al voorbij zijn, kun je niet kiezen
+    function tijdenBijwerken() {
+      var nu = new Date();
+      form.querySelectorAll('input[name="tijd"]').forEach(function (r) {
+        var p = r.value.split(':');
+        var voorbij = gekozen === vandaagIso && (+p[0] * 60 + +p[1]) <= (nu.getHours() * 60 + nu.getMinutes());
+        r.disabled = voorbij;
+        if (voorbij && r.checked) r.checked = false;
+      });
+    }
+
+
+    // Tijdkeuze-menu: opent en sluit het paneel; de radioknoppen blijven de echte invoer
+    var tk = document.getElementById('tijdKeuze');
+    var tkKnop = document.getElementById('tijdKnop');
+    var tkPaneel = document.getElementById('tijdPaneel');
+    var tkWaarde = document.getElementById('tijdWaarde');
+    tk.classList.add('tk--js');
+    // Het paneel hangt los boven de pagina en neemt dus nooit ruimte in (ook niet als een stijlregel ontbreekt)
+    tkPaneel.style.position = 'absolute'; tkPaneel.style.left = '0'; tkPaneel.style.right = '0';
+    function tkOpen() { return tkPaneel.classList.contains('open'); }
+    // Het paneel past zich aan de ruimte aan: het klapt omhoog als er onder te weinig plek is en wordt nooit hoger dan het scherm,
+    // zodat het de pagina niet verlengt of buiten beeld valt.
+    function tkPlaats() {
+      var r = tkKnop.getBoundingClientRect();
+      var onder = window.innerHeight - r.bottom - 12 - (window.innerWidth <= 720 ? 72 : 0);   // op telefoon: ruimte voor de navigatie onderaan
+      var boven = r.top - 12;
+      var gewenst = Math.min(224, tkPaneel.scrollHeight + 2);
+      var omhoog = onder < gewenst && boven > onder;
+      tkPaneel.classList.toggle('omhoog', omhoog);
+      tkPaneel.style.maxHeight = Math.max(Math.min(gewenst, omhoog ? boven : onder), 120) + 'px';
+    }
+    function tkZet(open, focusTerug) {
+      if (open) tkPlaats();
+      window[open ? 'addEventListener' : 'removeEventListener']('resize', tkPlaats);
+      window[open ? 'addEventListener' : 'removeEventListener']('scroll', tkPlaats, { passive: true });
+      tkPaneel.classList.toggle('open', open);
+      tkKnop.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        var doel = tkPaneel.querySelector('input:checked:not(:disabled)') || tkPaneel.querySelector('input:not(:disabled)');
+        if (doel) { doel.focus({ preventScroll: true }); doel.parentNode.scrollIntoView({ block: 'nearest' }); }
+      } else if (focusTerug) tkKnop.focus();
+    }
+    function tkLabel() {
+      var r = form.querySelector('input[name="tijd"]:checked');
+      // Eerst een dag kiezen: zolang er geen dag is, staat de tijdkeuze uit
+      tkKnop.disabled = !gekozen;
+      if (!gekozen && tkOpen()) tkZet(false, false);
+      tkWaarde.textContent = !gekozen ? 'Kies eerst een dag' : (r ? r.value + ' uur' : 'Kies een tijd');
+      tkWaarde.classList.toggle('leeg', !r);
+    }
+    tkKnop.addEventListener('click', function () { tkZet(!tkOpen(), false); });
+    tkKnop.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); tkZet(true); }
+    });
+    tkPaneel.addEventListener('click', function (e) {
+      if (e.detail > 0 && e.target.closest('.tk-optie') && !e.target.closest('input:disabled')) setTimeout(function () { tkZet(false, true); }, 120);
+    });
+    tkPaneel.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (e.target.type === 'radio') { e.target.checked = true; e.target.dispatchEvent(new Event('change', { bubbles: true })); } tkZet(false, true); }
+      if (e.key === 'Tab') tkZet(false, false);
+    });
+    tk.addEventListener('keydown', function (e) { if (e.key === 'Escape' && tkOpen()) { e.preventDefault(); tkZet(false, true); } });
+    document.addEventListener('click', function (e) { if (tkOpen() && !tk.contains(e.target)) tkZet(false, false); });
+    // Stappenplan: 1 dag, 2 tijd, 3 onderwerp, 4 reden. Alles blijft in hetzelfde formulier, dus er gaat niets verloren bij teruggaan.
+    var STAPPEN = ['stapDag', 'stapTijd', 'stapOnderwerp', 'stapReden'].map(function (id) { return document.getElementById(id); });
+    var NAMEN = ['Dag', 'Tijd', 'Type gesprek', 'Reden'];
+    var segs = form.querySelectorAll('.wiz-seg');
+    var verder = document.getElementById('verderKnop'), terug = document.getElementById('terugKnop'), verzend = document.getElementById('verzendKnop');
+    var samenv = document.getElementById('samenvatting'), hintSlb = document.getElementById('hintSlb'), teltekst = document.getElementById('wizTeller');
+    var stap = 1;
+    form.classList.add('wiz--js');
+    function geldig(n) {
+      if (n === 1) return !!gekozen;
+      if (n === 2) return !!form.querySelector('input[name="tijd"]:checked');
+      if (n === 3) return !!form.querySelector('input[name="onderwerp"]:checked');
+      return document.getElementById('reden').value.trim() !== '';
+    }
+    function bereikbaar(n) { for (var i = 1; i < n; i++) if (!geldig(i)) return false; return true; }
+    function toon(n, verplaatsFocus) {
+      var was = stap; stap = n;
+      tkZet(false, false);
+      STAPPEN.forEach(function (el, i) { el.hidden = (i + 1) !== n; });
+      verder.hidden = n === 4; verzend.hidden = n !== 4; terug.hidden = n === 1;
+      samenv.hidden = n !== 4; hintSlb.hidden = n !== 4;
+      var nieuw = STAPPEN[n - 1];
+      if (was !== n) {
+        nieuw.style.setProperty('--fase-van', n > was ? '14px' : '-14px');
+        nieuw.classList.remove('fase-in'); void nieuw.offsetWidth; nieuw.classList.add('fase-in');
+      }
+      if (verplaatsFocus) {
+        var doel = n === 1 ? (houder.querySelector('.kal-dag[aria-pressed="true"]') || houder.querySelector('.kal-dag:not(:disabled)'))
+                 : n === 2 ? tkKnop
+                 : n === 3 ? (form.querySelector('input[name="onderwerp"]:checked') || form.querySelector('input[name="onderwerp"]'))
+                 : document.getElementById('reden');
+        if (doel) doel.focus();
+      }
+      werkBij();
+    }
+    function foutTonen(n) {
+      if (n === 1) { document.getElementById('fout-datum').hidden = false; var d = houder.querySelector('.kal-dag:not(:disabled)'); if (d) d.focus(); }
+      if (n === 2) { document.getElementById('fout-tijd').hidden = false; tkKnop.focus(); }
+      if (n === 4) { document.getElementById('fout-reden').hidden = false; reden.setAttribute('aria-invalid', 'true'); reden.focus(); }
+    }
+    verder.addEventListener('click', function () { if (geldig(stap)) toon(stap + 1, true); else foutTonen(stap); });
+    terug.addEventListener('click', function () { toon(stap - 1, true); });
+    segs.forEach(function (sg) { sg.addEventListener('click', function () { var n = Number(sg.dataset.stap); if (n !== stap && bereikbaar(n)) toon(n, true); }); });
+
+    function werkBij() {
+      tijdenBijwerken();
+      tkLabel();
+      verder.disabled = !geldig(stap);
+      segs.forEach(function (sg, i) {
+        sg.disabled = !bereikbaar(i + 1);
+        sg.classList.toggle('klaar', geldig(i + 1) && bereikbaar(i + 1) && (i + 1) !== stap);
+        if (i + 1 === stap) sg.setAttribute('aria-current', 'step'); else sg.removeAttribute('aria-current');
+      });
+      teltekst.textContent = 'Stap ' + stap + ' van 4 · ' + NAMEN[stap - 1];
+      var tijd = form.querySelector('input[name="tijd"]:checked');
+      var onderwerp = form.querySelector('input[name="onderwerp"]:checked');
+      document.getElementById('stapDag').classList.toggle('klaar', !!gekozen);
+      document.getElementById('stapTijd').classList.toggle('klaar', !!tijd);
+      document.getElementById('stapReden').classList.toggle('klaar', document.getElementById('reden').value.trim() !== '');
+      var s = samenv;
+      if (gekozen && tijd) {
+        s.innerHTML = 'Je vraagt een <b></b> aan op <b></b> om <b></b>.';
+        var b = s.querySelectorAll('b');
+        b[0].textContent = onderwerp ? onderwerp.value : 'gesprek';
+        b[1].textContent = mooi(gekozen);
+        b[2].textContent = tijd.value;
+      } else {
+        s.textContent = gekozen ? 'Gekozen: ' + mooi(gekozen) + '. Kies nog een tijd.' : 'Kies een dag en een tijd.';
+      }
+    }
+
+    form.addEventListener('change', function (e) {
+      if (e.target.name === 'tijd') document.getElementById('fout-tijd').hidden = true;
+      werkBij();
+    });
+
+    var reden = document.getElementById('reden');
+    var teller = document.getElementById('teller');
+    reden.addEventListener('input', function () {
+      teller.textContent = reden.value.length;
+      if (reden.value.trim() !== '') { reden.removeAttribute('aria-invalid'); document.getElementById('fout-reden').hidden = true; }
+      werkBij();
+    });
+
+    // Controle vóór verzenden: dag, tijd en reden zijn verplicht (de server controleert altijd opnieuw).
+    // Enter in een eerdere stap gaat naar de volgende stap in plaats van te verzenden.
+    form.addEventListener('submit', function (e) {
+      if (stap < 4) { e.preventDefault(); if (geldig(stap)) toon(stap + 1, true); else foutTonen(stap); return; }
+      for (var n = 1; n <= 4; n++) {
+        if (!geldig(n)) { e.preventDefault(); toon(n, false); foutTonen(n); return; }
+      }
+    });
+
+    teken();
+    // Na een validatiefout (old-waarden) met dag en tijd ingevuld: meteen fase 2
+    toon(geldig(1) && geldig(2) ? 4 : (geldig(1) ? 2 : 1), false);
+  })();
+
+  /* ---------- Annuleren: eerst bevestigen in een <dialog> ---------- */
+  (function () {
+    var dialoog = document.getElementById('annuleerDialog');
+    if (!dialoog || typeof dialoog.showModal !== 'function') return;   // oude browser: gewoon versturen
+    var tekst = document.getElementById('annuleerTekst');
+    var wachtend = null;
+    document.querySelectorAll('.annuleer-form').forEach(function (f) {
+      f.addEventListener('submit', function (e) {
+        e.preventDefault();
+        wachtend = f;
+        tekst.textContent = 'Je ' + f.dataset.onderwerp + ' op ' + f.dataset.wanneer + ' wordt geannuleerd. Je kunt dit niet ongedaan maken.';
+        dialoog.showModal();
+        document.getElementById('annuleerNee').focus();
+      });
+    });
+    document.getElementById('annuleerJa').addEventListener('click', function () { if (wachtend) wachtend.submit(); });
+    document.getElementById('annuleerNee').addEventListener('click', function () { dialoog.close(); });
+    // Klik naast het venster (op de donkere achtergrond) sluit het ook
+    dialoog.addEventListener('click', function (e) {
+      var r = dialoog.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dialoog.close();
+    });
+  })();
+
+  /* ---------- Navigatiebalk in- en uitklappen ---------- */
+  (function () {
+    var rail = document.getElementById('navRail');
+    var toggle = document.getElementById('navToggle');
+    if (!rail || !toggle) return;
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.addEventListener('click', function () {
+      var open = rail.classList.toggle('expanded');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  })();
+</script>
+
+</body>
+</html>

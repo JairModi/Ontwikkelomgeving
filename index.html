@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="nl" class="no-js">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="portaal/logo-icoon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Dashboard — Persoonlijke Ontwikkelomgeving</title>
+<script>
+  /* =====================================================================
+     BEWEGINGSVOORKEUR — moet in de <head> staan, vóór de pagina getekend wordt,
+     anders zie je heel even de standaardanimaties voordat de voorkeur actief is.
+
+     Modi op <html data-motion="...">:
+       (geen attribuut) = volg de systeeminstelling (prefers-reduced-motion)
+       standard         = volledige animaties
+       reduced          = korte, eenvoudige overgangen zonder verschuiving
+       off              = geen niet-noodzakelijke animaties of overgangen
+
+     Volgorde waarin de voorkeur bepaald wordt:
+       1. data-motion staat al in de HTML (later: door de server uit het account)
+       2. keuze die in deze browser is opgeslagen (localStorage)
+       3. niets: de systeeminstelling bepaalt het
+     ===================================================================== */
+  (function () {
+    var root = document.documentElement;
+    root.className = 'js'; // zo kan CSS onderdelen verbergen die alleen met JavaScript werken
+
+    var MODI = ['standard', 'reduced', 'off'];
+    var SLEUTEL = 'poo-beweging';
+
+    function leesLokaal() { try { return localStorage.getItem(SLEUTEL); } catch (e) { return null; } }
+    function schrijfLokaal(m) {
+      try { if (m) localStorage.setItem(SLEUTEL, m); else localStorage.removeItem(SLEUTEL); } catch (e) {}
+    }
+    function pasToe(m) {
+      if (MODI.indexOf(m) > -1) root.setAttribute('data-motion', m);
+      else root.removeAttribute('data-motion');
+    }
+
+    if (!root.hasAttribute('data-motion')) pasToe(leesLokaal());
+
+    // Eén centrale ingang voor de hele app. Een instellingenmenu roept later POO.beweging.zet(...) aan.
+    window.POO = window.POO || {};
+    window.POO.beweging = {
+      modi: ['systeem'].concat(MODI),
+      // De gekozen voorkeur: 'systeem', 'standard', 'reduced' of 'off'
+      voorkeur: function () { return root.getAttribute('data-motion') || 'systeem'; },
+      // Wat er echt gebeurt: de strengste van (voorkeur, systeeminstelling)
+      effectief: function () {
+        var m = root.getAttribute('data-motion');
+        if (m === 'off') return 'off';
+        if (m === 'reduced' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 'reduced';
+        return 'standard';
+      },
+      zet: function (m) {
+        if (m !== 'systeem' && MODI.indexOf(m) === -1) throw new Error('Onbekende bewegingsmodus: ' + m);
+        pasToe(m);
+        schrijfLokaal(m === 'systeem' ? null : m);
+        root.dispatchEvent(new CustomEvent('poo:beweging', { detail: { voorkeur: m } }));
+      }
+    };
+  })();
+
+  /* =====================================================================
+     THEMAVOORKEUR (licht / donker) — zelfde opzet als de bewegingsvoorkeur.
+       licht   = standaard
+       donker  = donkere kleuren
+       systeem = volg de instelling van het apparaat (prefers-color-scheme)
+     De keuze staat in deze browser (localStorage 'poo-thema'). Op <html> komt data-thema="donker"
+     als het donker moet zijn; de CSS hieronder vult dan de donkere kleuren in.
+     ===================================================================== */
+  (function () {
+    var root = document.documentElement;
+    var SLEUTEL = 'poo-thema';
+    var MODI = ['licht', 'donker', 'systeem'];
+    var systeemDonker = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function lees() { try { return localStorage.getItem(SLEUTEL) || 'licht'; } catch (e) { return 'licht'; } }
+    function schrijf(m) { try { localStorage.setItem(SLEUTEL, m); } catch (e) {} }
+    function pasToe(m) {
+      var donker = m === 'donker' || (m === 'systeem' && systeemDonker && systeemDonker.matches);
+      if (donker) root.setAttribute('data-thema', 'donker'); else root.removeAttribute('data-thema');
+    }
+
+    pasToe(lees());
+    // Staat "systeem" aan en verandert het apparaat van licht naar donker (bijv. 's avonds)? Meteen meegaan.
+    if (systeemDonker && systeemDonker.addEventListener) {
+      systeemDonker.addEventListener('change', function () { if (lees() === 'systeem') pasToe('systeem'); });
+    }
+
+    window.POO = window.POO || {};
+    window.POO.thema = {
+      modi: MODI,
+      voorkeur: lees,                                            // 'licht', 'donker' of 'systeem'
+      donker: function () { return root.getAttribute('data-thema') === 'donker'; },
+      zet: function (m) {
+        if (MODI.indexOf(m) === -1) throw new Error('Onbekend thema: ' + m);
+        schrijf(m);
+        pasToe(m);
+        root.dispatchEvent(new CustomEvent('poo:thema', { detail: { voorkeur: m } }));
+      }
+    };
+  })();
+</script>
+<style>
+  /* =====================================================================
+     DESIGN TOKENS — contrast nagerekend (WCAG 2.2 AA):
+     tekst ≥ 4.5:1, randen/focus/iconen ≥ 3:1.
+     ===================================================================== */
+  :root {
+    /* Merkkleuren */
+    --kleur-navy: #15233A;
+    --kleur-navy-licht: #1E3A5F;
+    --kleur-navy-hover: #213A5E;
+    --kleur-blauw: #60ACE1;
+    --kleur-blauw-donker: #3F8CDD;
+    --kleur-blauw-focus: #1F6FC2;        /* 5.1:1 op wit, 4.4:1 op lila */
+    --kleur-geel: #FEBD3A;
+    --kleur-rood: #F66169;
+    --kleur-lila: #F1EBF7;
+
+    /* Interfacekleuren */
+    --kleur-achtergrond: var(--kleur-lila);
+    --kleur-oppervlak: #FFFFFF;
+    --kleur-oppervlak-zacht: #F7F4FB;    /* lichte vlakjes binnen een kaart */
+    --kleur-rand: #E4DCEE;
+    --kleur-rand-veld: #8B8FA6;          /* 3.2:1 op wit */
+    --kleur-rand-veld-hover: #6B7088;
+    --kleur-tekst: #161B26;              /* 17:1 op wit */
+    --kleur-tekst-zacht: #4B5468;        /* 7.6:1 op wit */
+    --kleur-tekst-subtiel: #5B6477;      /* 5.9:1 op wit: metadata, datums */
+    --kleur-icoon: #5B6477;
+    --kleur-link: #1F6FC2;               /* 5.1:1 op wit (#3F8CDD haalde maar 3.6:1) */
+    --kleur-link-hover: #17589C;
+    --kleur-op-navy: #FFFFFF;
+    --kleur-op-navy-zacht: #A9BDDA;      /* 8.2:1 op navy */
+    --kleur-op-navy-subtiel: #8FA6C8;    /* 6.3:1 op navy */
+    --kleur-focus-op-navy: #8EC1EE;      /* focusring op donkere vlakken: 8:1 */
+    --kleur-knop-tekst: #0B1A30;         /* 7:1 op blauw, 5:1 op blauw-donker */
+    --kleur-fout: #B91C1C;               /* 6.5:1 op wit */
+    --kleur-fout-achtergrond: #FEF2F2;
+    --kleur-fout-rand: #F8B4B8;
+    --kleur-waarschuwing: #8A5A00;       /* 5.9:1 op wit */
+    --kleur-skelet: #ECE6F3;
+    --kleur-skelet-glans: #F7F3FB;
+    --kleur-lijn: #F1ECF6;               /* dunne scheidingslijnen binnen een kaart */
+    --kleur-balk-leeg: #EEE8F5;          /* lege voortgangsbalk */
+    --kleur-donkere-kaart: var(--kleur-navy); /* donkere accentkaart (bijv. Mijn begeleiding) */
+    --kleur-donkere-kaart-rand: var(--kleur-navy);
+    --kleur-actief-vlak: var(--kleur-navy);   /* gekozen knop / fase (wit erop) */
+
+    /* Getinte labels en icoontjes: achtergrond + tekst (contrast ≥ 4.5:1 in beide thema's) */
+    --tint-blauw-bg: #DCEBFA;   --tint-blauw-tekst: #1E5FA8;
+    --tint-paars-bg: #EDE9FE;   --tint-paars-tekst: #5B21B6;
+    --tint-groen-bg: #D1FAE5;   --tint-groen-tekst: #065F46;
+    --tint-geel-bg: #FEF3C7;    --tint-geel-tekst: #92400E;
+    --tint-grijs-bg: #E5E7EB;   --tint-grijs-tekst: #374151;
+    --tint-rood-bg: #FEF1F2;    --tint-rood-rand: #FBC6CA;
+    color-scheme: light;
+
+    /* Typografie — alles in rem, zodat de lettergrootte van de gebruiker meetelt */
+    --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+    --tekst-xs: 0.75rem;        /* 12px: alleen codes en kleine labels */
+    --tekst-klein: 0.8125rem;   /* 13px: metadata */
+    --tekst-sm: 0.875rem;       /* 14px: meldingen, secundaire tekst */
+    --tekst-label: 0.9375rem;   /* 15px: labels, lijstregels */
+    --tekst-basis: 1rem;        /* 16px: gewone tekst */
+    --tekst-veld: max(16px, 1rem); /* nooit onder 16px: anders zoomt iPhone in bij typen */
+
+    /* Ruimte: stappen van 0.25rem (4px) */
+    --ruimte-1: 0.25rem; --ruimte-2: 0.5rem;  --ruimte-3: 0.75rem; --ruimte-4: 1rem;
+    --ruimte-5: 1.25rem; --ruimte-6: 1.5rem;  --ruimte-8: 2rem;     --ruimte-10: 2.5rem;
+    --ruimte-12: 3rem;   --ruimte-14: 3.5rem;
+
+    /* Vormen */
+    --radius-klein: 6px;
+    --radius: 8px;
+    --radius-groot: 12px;
+    --hoogte-bediening: 2.75rem;        /* 44px: ook een prettig tikdoel op touchscreens */
+    --hoogte-bediening-groot: 3rem;     /* 48px */
+    --schaduw-vlak: 0 1px 3px rgba(21,35,58,0.06), 0 1px 2px rgba(21,35,58,0.04);
+
+    /* Easing: hetzelfde voor de hele app */
+    --ease-uit: cubic-bezier(0.2, 0.7, 0.2, 1);    /* snel starten, zacht landen */
+    --ease-in-uit: cubic-bezier(0.45, 0, 0.25, 1); /* heen-en-weer */
+
+    /* ===== BEWEGING — modus "standard" =====
+       Componenten gebruiken ALLEEN deze tokens. De modi hieronder vullen ze anders in,
+       dus een component hoeft nooit zelf te weten welke modus actief is. */
+    --beweging-snel: 120ms;          /* hover, kleur, feedback op een klik */
+    --beweging-standaard: 200ms;     /* focus, meldingen, icoonwissel, uitklappen */
+    --beweging-intrede: 480ms;       /* binnenkomst van een onderdeel */
+    --beweging-stap: 50ms;           /* vertraging tussen opeenvolgende onderdelen */
+    --beweging-afstand: 8px;         /* verschuiving bij binnenkomst */
+    --beweging-afstand-klein: 4px;   /* verschuiving van meldingen */
+    --beweging-lift: -1px;           /* knop omhoog bij hover */
+    --beweging-druk: 0.985;          /* knop bij indrukken */
+    --beweging-icoon-draai: 12deg;
+    --beweging-icoon-schaal: 0.8;
+    --beweging-sfeer: running;       /* decoratieve achtergrond- en glansanimaties */
+    --beweging-spinner: 0.8s;        /* één rondje van de laadspinner */
+    --beweging-schud: 6px;           /* hoe ver een fout veld heen en weer trilt */
+    --beweging-schud-duur: 420ms;
+    --beweging-vulling: 800ms;       /* voortgangsbalken die vollopen */
+    --beweging-overlay: flex;        /* welkomstscherm: tonen (flex) of overslaan (none) */
+    --beweging-overlay-wacht: 1100ms;/* hoe lang een welkomstscherm blijft staan */
+    --beweging-overlay-uit: 350ms;   /* hoe lang het wegfaden duurt */
+  }
+
+  /* ===== Modus "reduced": kort, alleen infaden, geen verschuiving of sfeer ===== */
+  :root[data-motion="reduced"] {
+    --beweging-snel: 80ms;  --beweging-standaard: 120ms; --beweging-intrede: 200ms; --beweging-stap: 0ms;
+    --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+    --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 1.6s;
+    --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+    --beweging-overlay: flex; --beweging-overlay-wacht: 500ms; --beweging-overlay-uit: 200ms;
+  }
+  /* Systeeminstelling "minder beweging" geeft minimaal "reduced", ook als iemand "standard" kiest.
+     (Zelfde waarden als hierboven; CSS kan een media query en een selector niet in één regel combineren.) */
+  @media (prefers-reduced-motion: reduce) {
+    :root:not([data-motion="off"]) {
+      --beweging-snel: 80ms;  --beweging-standaard: 120ms; --beweging-intrede: 200ms; --beweging-stap: 0ms;
+      --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+      --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 1.6s;
+      --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+      --beweging-overlay: flex; --beweging-overlay-wacht: 500ms; --beweging-overlay-uit: 200ms;
+    }
+  }
+  /* ===== Modus "off": alles direct. Staatwijzigingen (kleur, focus, meldingen, laadtekst) blijven zichtbaar. ===== */
+  :root[data-motion="off"] {
+    --beweging-snel: 0ms;   --beweging-standaard: 0ms;   --beweging-intrede: 0ms;   --beweging-stap: 0ms;
+    --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+    --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 0s;
+    --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+    --beweging-overlay: none; --beweging-overlay-wacht: 0ms; --beweging-overlay-uit: 0ms;
+  }
+
+  /* ===== DONKER THEMA: alleen de tokens krijgen een andere waarde; onderdelen hoeven niets te weten ===== */
+  :root[data-thema="donker"] {
+    --kleur-achtergrond: #0E1524;
+    --kleur-oppervlak: #172134;
+    --kleur-oppervlak-zacht: #1D2940;
+    --kleur-rand: #2A3852;
+    --kleur-rand-veld: #5D6A84;          /* 3.3:1 op oppervlak */
+    --kleur-rand-veld-hover: #7A87A1;
+    --kleur-tekst: #E8EDF5;              /* 14:1 */
+    --kleur-tekst-zacht: #BAC5D8;        /* 9:1 */
+    --kleur-tekst-subtiel: #97A4BA;      /* 6.3:1 */
+    --kleur-icoon: #97A4BA;
+    --kleur-link: #82BCF2;               /* 7.6:1 */
+    --kleur-link-hover: #A9D1F7;
+    --kleur-blauw-focus: #82BCF2;
+    --kleur-lila: #222E46;
+    --kleur-fout: #FCA5A5;
+    --kleur-fout-achtergrond: #3A1E26;
+    --kleur-fout-rand: #7F2A35;
+    --kleur-waarschuwing: #F5C66B;
+    --kleur-skelet: #222E46;
+    --kleur-skelet-glans: #2B3954;
+    --kleur-lijn: #243048;
+    --kleur-balk-leeg: #2A3852;
+    --kleur-donkere-kaart: #101A2B;
+    --kleur-donkere-kaart-rand: #2A3852;
+    --kleur-actief-vlak: #2B5C96;             /* blauw i.p.v. navy: navy valt weg op een donkere kaart (wit erop 6.6:1) */
+    --schaduw-vlak: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+
+    --tint-blauw-bg: rgba(96,172,225,0.16);  --tint-blauw-tekst: #9CCBF5;
+    --tint-paars-bg: rgba(139,92,246,0.20);  --tint-paars-tekst: #C9B8FD;
+    --tint-groen-bg: rgba(16,185,129,0.18);  --tint-groen-tekst: #7EE2B8;
+    --tint-geel-bg: rgba(254,189,58,0.16);   --tint-geel-tekst: #F8CF72;
+    --tint-grijs-bg: #26324A;                --tint-grijs-tekst: #CBD5E1;
+    --tint-rood-bg: #3A1E26;                 --tint-rood-rand: #7F2A35;
+    color-scheme: dark;
+  }
+  /* Kleuren lopen zacht over als je wisselt (niet bij minder beweging: dan is de duur 0) */
+  :root.thema-wissel, :root.thema-wissel body, :root.thema-wissel body * {
+    transition: background-color var(--beweging-intrede) var(--ease-uit), border-color var(--beweging-intrede) var(--ease-uit),
+                color var(--beweging-intrede) var(--ease-uit) !important;
+  }
+
+  /* ===== Gedeelde animaties =====
+     Elementen zijn standaard zichtbaar; alleen het beginpunt van een animatie is doorzichtig.
+     Met duur 0ms springt een animatie direct naar het eindpunt, dus inhoud blijft nooit verborgen. */
+  @keyframes opkomen {
+    from { opacity: 0; transform: translate3d(0, var(--_afstand, var(--beweging-afstand)), 0); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes infaden { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes uitfaden { to { opacity: 0; visibility: hidden; } }
+  @keyframes draai { to { transform: rotate(360deg); } }
+  @keyframes vullen { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes schudden {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    15% { transform: translate3d(calc(var(--beweging-schud) * -1), 0, 0); }
+    30% { transform: translate3d(calc(var(--beweging-schud) * 0.8), 0, 0); }
+    45% { transform: translate3d(calc(var(--beweging-schud) * -0.6), 0, 0); }
+    60% { transform: translate3d(calc(var(--beweging-schud) * 0.4), 0, 0); }
+    75% { transform: translate3d(calc(var(--beweging-schud) * -0.2), 0, 0); }
+  }
+  @keyframes glans { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+
+  /* Binnenkomst. Volgorde met --i (0, 1, 2 ...); een pagina kan alles later laten starten met --start. */
+  .intrede {
+    animation: opkomen var(--beweging-intrede) var(--ease-uit)
+               calc(var(--start, 0ms) + var(--beweging-stap) * var(--i, 0)) both;
+  }
+  /* JavaScript zet deze klasse op een element om het één keer te laten trillen */
+  .schud { animation: schudden var(--beweging-schud-duur) var(--ease-in-uit) both; }
+
+  /* ===== Basis ===== */
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  /* Grote monitoren: alles schaalt een klein beetje mee (in %, dus de instelling van de gebruiker blijft gelden) */
+  @media (min-width: 1600px) and (min-height: 850px) { html { font-size: 106.25%; } } /* ± 17px */
+  @media (min-width: 2200px) and (min-height: 1100px) { html { font-size: 118.75%; } } /* ± 19px */
+  body {
+    margin: 0;
+    font-family: var(--font); font-size: var(--tekst-basis); line-height: 1.5;
+    color: var(--kleur-tekst); background: var(--kleur-achtergrond);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--font-mono); }
+  /* Het attribuut hidden wint altijd, ook van klassen als .knop (display: inline-flex) */
+  [hidden] { display: none !important; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ===== Knoppen ===== */
+  .knop {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--ruimte-2);
+    min-height: var(--hoogte-bediening); padding: var(--ruimte-2) var(--ruimte-5);
+    font-family: inherit; font-size: var(--tekst-basis); font-weight: 600; line-height: 1.2;
+    border: 0; border-radius: var(--radius); cursor: pointer; text-decoration: none;
+    transition:
+      background-color var(--beweging-snel) var(--ease-uit),
+      border-color var(--beweging-snel) var(--ease-uit),
+      color var(--beweging-snel) var(--ease-uit),
+      box-shadow var(--beweging-standaard) var(--ease-uit),
+      transform var(--beweging-snel) var(--ease-uit);
+  }
+  .knop:focus-visible { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 2px; }
+  .knop--primair {
+    background: var(--kleur-blauw); color: var(--kleur-knop-tekst);
+    box-shadow: 0 1px 2px rgba(21,35,58,0.08);
+  }
+  @media (hover: hover) {
+    .knop--primair:hover {
+      background: var(--kleur-blauw-donker); transform: translateY(var(--beweging-lift));
+      box-shadow: 0 6px 16px -6px rgba(31,111,194,0.5);
+    }
+  }
+  .knop--primair:active {
+    background: var(--kleur-blauw-donker); transform: scale(var(--beweging-druk));
+    box-shadow: inset 0 2px 0 rgba(11,26,48,0.2);
+  }
+  /* Secundair: wit met rand, voor minder belangrijke acties */
+  .knop--secundair {
+    background: var(--kleur-oppervlak); color: var(--kleur-tekst-zacht);
+    border: 1px solid var(--kleur-rand); font-size: var(--tekst-sm);
+  }
+  @media (hover: hover) {
+    .knop--secundair:hover { border-color: var(--kleur-rand-veld); color: var(--kleur-tekst); }
+  }
+  .knop--secundair:active { transform: scale(var(--beweging-druk)); }
+  .knop:disabled { background: #C9CDD8; color: #3E4658; cursor: not-allowed; box-shadow: none; transform: none; }
+  .knop--groot { min-height: var(--hoogte-bediening-groot); font-size: 1.0625rem; font-weight: 700; }
+  .knop--breed { width: 100%; }
+
+  /* Laadtoestand: tekst + spinner; geen lift meer */
+  .knop.laden,
+  .knop.laden:hover,
+  .knop.laden:active { background: var(--kleur-blauw-donker); cursor: progress; box-shadow: none; transform: none; }
+  .knop.laden .knop-tekst { animation: infaden var(--beweging-standaard) var(--ease-uit) both; }
+  .knop-spinner {
+    display: none; width: 1rem; height: 1rem; flex-shrink: 0; border-radius: 50%;
+    border: 2px solid rgba(11,26,48,0.25); border-top-color: var(--kleur-knop-tekst);
+    animation: draai var(--beweging-spinner) linear infinite;
+  }
+  .knop.laden .knop-spinner { display: inline-block; }
+  /* Modus "off": stilstaande ring; de knoptekst zegt al wat er gebeurt */
+  :root[data-motion="off"] .knop-spinner { border-color: var(--kleur-knop-tekst); border-right-color: transparent; }
+
+  /* ===== Skeleton (voor onderdelen die later via JavaScript laden) =====
+     Alleen gebruiken waar data echt asynchroon binnenkomt, NIET voor inhoud die Laravel al meestuurt.
+     Gebruik:
+       <section aria-busy="true" aria-describedby="...">
+         <span class="skelet skelet--tekst" style="width: 60%"></span>
+         <span class="skelet skelet--blok" style="height: 4.5rem"></span>
+       </section>
+     Zodra de data er is: skelet-elementen vervangen en aria-busy weghalen.
+     Glans staat stil in "reduced" en "off" (dan blijft het een rustig grijs vlak). */
+  .skelet {
+    display: block; border-radius: var(--radius-klein);
+    background: linear-gradient(90deg, var(--kleur-skelet) 0%, var(--kleur-skelet-glans) 50%, var(--kleur-skelet) 100%);
+    background-size: 200% 100%;
+    animation: glans 1.4s linear infinite;
+    animation-play-state: var(--beweging-sfeer);
+  }
+  .skelet--tekst { height: 0.875em; margin: 0.3em 0; }
+  .skelet--blok { height: 3rem; border-radius: var(--radius); }
+  .skelet--rond { border-radius: 50%; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens, bewegingsmodi, keyframes, .intrede, .knop en .sr-only komen uit portaal.partials.basis.
+     Hieronder alleen wat specifiek is voor het dashboard. Geen zoom meer: alle maten in rem,
+     zodat de pagina meeschaalt met de lettergrootte en zoom van de gebruiker. */
+  :root {
+    --rail-breedte: 4.5rem;          /* 72px */
+    --rail-breedte-open: 14rem;    /* 200px */
+    --inhoud-max: 72rem;             /* ± 1150px: prettige breedte op grote schermen */
+    --inhoud-x: clamp(1rem, 0.5rem + 2.5vw, 2.5rem);
+    --inhoud-y: clamp(1.25rem, 4vh, 2.5rem);
+    --kaart-padding: clamp(1rem, 0.75rem + 0.8vw, 1.5rem);
+    --raster-gat: clamp(0.75rem, 0.5rem + 0.6vw, 1rem);
+    --tekst-titel: clamp(1.375rem, 1.2rem + 0.6vw, 1.75rem);   /* 22–28px */
+  }
+
+  a { color: #3F8CDD; text-decoration: none; }       /* ongewijzigd: de navigatiebalk leunt hierop */
+  a:hover { color: #2F74C0; }
+  p { margin: 0; }
+
+  /* "Naar de inhoud": verschijnt alleen bij toetsenbordfocus, zodat je de navigatie kunt overslaan */
+  .sla-over {
+    position: absolute; left: var(--ruimte-3); top: var(--ruimte-3); z-index: 100;
+    padding: var(--ruimte-2) var(--ruimte-4); border-radius: var(--radius);
+    background: var(--kleur-oppervlak); color: var(--kleur-link); font-weight: 600;
+    transform: translateY(-200%);
+  }
+  .sla-over:focus { transform: none; outline: 3px solid var(--kleur-blauw-focus); outline-offset: 2px; }
+  .hoofdinhoud:focus { outline: none; }
+
+  /* ===== Paginaopbouw: navigatiebalk + inhoud. De pagina scrolt gewoon als het niet past. ===== */
+  .pagina { display: flex; min-height: 100vh; min-height: 100dvh; width: 100%; }
+
+  /* ===== Navigatiebalk (inhoud komt uit portaal.partials.rail) ===== */
+  .rail {
+    position: sticky; top: 0; align-self: flex-start;
+    width: var(--rail-breedte); height: 100vh; height: 100dvh; flex-shrink: 0;
+    background: var(--kleur-navy); display: flex; flex-direction: column; padding: 0.875rem 0;
+    overflow-x: hidden; overflow-y: auto;
+    transition: width var(--beweging-standaard) var(--ease-uit);
+  }
+  .rail.expanded { width: var(--rail-breedte-open); }
+  .rail-label { display: none; white-space: nowrap; }
+  .rail.expanded .rail-label { display: block; }
+  .navitem { text-decoration: none; }
+  .gebruikerlink:hover { background: #1B2E4B; }
+  .rail a:focus-visible,
+  .rail button:focus-visible { outline: 2px solid var(--kleur-focus-op-navy); outline-offset: 2px; border-radius: var(--radius); }
+  .uitlog-knop {
+    background: none; border: none; color: var(--kleur-op-navy-subtiel); font-family: var(--font);
+    font-size: var(--tekst-xs); cursor: pointer; padding: 0; text-align: left;
+  }
+  .uitlog-knop:hover { color: #FFFFFF; }
+
+  /* ===== Hoofdinhoud ===== */
+  .hoofdinhoud {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+    padding: var(--inhoud-y) var(--inhoud-x) calc(var(--inhoud-y) + 0.5rem);
+  }
+  /* margin: auto centreert de inhoud als er ruimte over is; is het scherm te laag, dan begint hij bovenaan
+     en scrolt de pagina. container-type: de onderdelen passen zich aan op de BESCHIKBARE breedte. */
+  .hoofdinhoud-binnen {
+    width: 100%; max-width: var(--inhoud-max); margin: auto;
+    container: dashboard / inline-size;
+  }
+
+  /* ===== Kop ===== */
+  .dash-kop {
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;
+    gap: var(--ruimte-4); margin-bottom: var(--ruimte-6);
+  }
+  .dash-kop > div { min-width: 0; }
+  .dash-datum { font-size: var(--tekst-sm); color: var(--kleur-tekst-subtiel); margin-bottom: var(--ruimte-1); }
+  .dash-titel {
+    margin: 0; font-size: var(--tekst-titel); line-height: 1.2; font-weight: 700; letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  .header-uitlog svg { flex-shrink: 0; }
+  @media (hover: hover) {
+    .header-uitlog:hover { background: var(--tint-rood-bg); border-color: var(--tint-rood-rand); color: var(--kleur-fout); }
+  }
+
+  /* ===== Kaarten (gedeeld) ===== */
+  .kaart {
+    min-width: 0;
+    background: var(--kleur-oppervlak); border: 1px solid var(--kleur-rand);
+    border-radius: var(--radius-groot); box-shadow: var(--schaduw-vlak);
+    padding: var(--kaart-padding);
+  }
+  .kaart-kop {
+    display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+    gap: var(--ruimte-1) var(--ruimte-4); margin-bottom: var(--ruimte-4);
+  }
+  .kaart-titel { margin: 0; font-size: 1.0625rem; line-height: 1.3; font-weight: 700; }
+  .kaart-titel-sub { font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-tekst-subtiel); }
+  .kaart-link {
+    display: inline-flex; align-items: center; gap: var(--ruimte-1);
+    font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-link); border-radius: 4px;
+  }
+  .kaart-link:hover { color: var(--kleur-link-hover); text-decoration: underline; text-underline-offset: 3px; }
+  .hoofdinhoud a:focus-visible { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 2px; border-radius: 4px; }
+  .leeg { font-size: var(--tekst-sm); color: var(--kleur-tekst-subtiel); }
+  .leeg a { color: var(--kleur-link); font-weight: 600; }
+  .lijst { list-style: none; margin: 0; padding: 0; }
+
+  /* ===== Statistiektegels: 4 naast elkaar als er ruimte is, anders 2, op heel smal 1 ===== */
+  .stats {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--raster-gat); margin-bottom: var(--raster-gat);
+  }
+  @container dashboard (min-width: 52rem) { .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @container dashboard (max-width: 19rem) { .stats { grid-template-columns: minmax(0, 1fr); } }
+
+  .tegel { display: flex; flex-direction: column; gap: var(--ruimte-2); }
+  .tegel-kop { display: flex; align-items: center; justify-content: space-between; gap: var(--ruimte-2); }
+  .tegel-label { font-size: var(--tekst-klein); font-weight: 600; color: var(--kleur-tekst-zacht); line-height: 1.3; }
+  .tegel-icoon {
+    width: 1.75rem; height: 1.75rem; border-radius: 7px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tegel-icoon--blauw  { background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst); }
+  .tegel-icoon--groen  { background: var(--tint-groen-bg); color: var(--tint-groen-tekst); }
+  .tegel-icoon--geel   { background: var(--tint-geel-bg); color: var(--tint-geel-tekst); }
+  .tegel-icoon--paars  { background: var(--tint-paars-bg); color: var(--tint-paars-tekst); }
+  .tegel-waarde { font-size: 1.125rem; line-height: 1.3; font-weight: 700; overflow-wrap: anywhere; }
+  .tegel-waarde--getal { font-size: 1.5rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .tegel-waarde-van { font-size: var(--tekst-sm); font-weight: 500; color: var(--kleur-tekst-subtiel); }
+  .tegel-meta { font-size: var(--tekst-klein); color: var(--kleur-tekst-subtiel); line-height: 1.4; margin-top: auto; }
+
+  /* Voortgangsbalk: loopt vol met transform (soepel en zonder layoutwerk) */
+  .balk { height: 6px; border-radius: 4px; background: var(--kleur-balk-leeg); overflow: hidden; margin-top: auto; }
+  .vulling {
+    height: 100%; border-radius: 4px; transform-origin: left center;
+    animation: vullen var(--beweging-vulling) var(--ease-uit)
+               calc(var(--start, 0ms) + var(--beweging-stap) * 4 + 200ms) both;
+  }
+
+  /* ===== Twee kolommen als er ruimte is, anders onder elkaar ===== */
+  .dash-raster { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--raster-gat); align-items: start; }
+  @container dashboard (min-width: 50rem) {
+    .dash-raster { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+  }
+  .dash-kolom { display: flex; flex-direction: column; gap: var(--raster-gat); min-width: 0; }
+
+  /* ===== Skills-overzicht (leeruitkomsten van mijn fase) ===== */
+  /* Fase-route: drie punten op een lijn; wat achter je ligt is groen, je huidige fase geel */
+  .fase-lijn { list-style: none; margin: 0 0 var(--ruimte-5); padding: 0; display: flex; }
+  .fase-lijn li {
+    flex: 1; min-width: 0; position: relative; padding-top: 1.25rem;
+    font-size: var(--tekst-xs); font-weight: 600; color: var(--kleur-tekst-subtiel); text-align: center;
+  }
+  .fase-lijn li::before {                       /* het punt */
+    content: ""; position: absolute; top: 0; left: 50%; z-index: 1;
+    width: 0.75rem; height: 0.75rem; margin-left: -0.375rem; border-radius: 50%;
+    background: var(--kleur-oppervlak); border: 2px solid var(--kleur-rand-veld);
+  }
+  .fase-lijn li::after {                        /* de lijn naar het volgende punt */
+    content: ""; position: absolute; top: calc(0.375rem - 1px); left: 50%; width: 100%; height: 2px; background: var(--kleur-rand);
+  }
+  .fase-lijn li:last-child::after { display: none; }
+  .fase-lijn li.klaar::before { background: #10B981; border-color: #10B981; }
+  .fase-lijn li.klaar::after  { background: #10B981; }
+  .fase-lijn li.nu::before { background: var(--kleur-geel); border-color: var(--kleur-geel); box-shadow: 0 0 0 4px rgba(254,189,58,0.25); }
+  .fase-lijn li.nu { color: var(--kleur-tekst); font-weight: 700; }
+  .fase-lijn .sr-only { position: absolute; }
+  .fase-lijn li { padding-inline: var(--ruimte-1); }
+  /* Smal (telefoon): kleinere namen, zodat "Verdiepingsfase" en "Afrondingsfase" niet tegen elkaar aan staan */
+  @container dashboard (max-width: 26rem) { .fase-lijn li { font-size: 0.6875rem; } }
+
+  /* Hard- en softskills naast elkaar als er ruimte is, anders onder elkaar */
+  .skills { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--ruimte-5); }
+  @container dashboard (min-width: 40rem) { .skills { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .skills-kop { display: flex; align-items: center; justify-content: space-between; gap: var(--ruimte-2); margin-bottom: var(--ruimte-2); }
+  .skills-titel { display: flex; align-items: center; gap: var(--ruimte-2); margin: 0; font-size: var(--tekst-label); font-weight: 700; }
+  .skills-titel .aantal { font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-tekst-subtiel); }
+  .stip { width: 0.625rem; height: 0.625rem; border-radius: 50%; flex-shrink: 0; }
+  .hardskill .stip { background: var(--kleur-blauw-donker); }
+  .softskill .stip { background: #8B5CF6; }
+  .skill {
+    display: flex; align-items: flex-start; gap: var(--ruimte-2);
+    padding: var(--ruimte-2) var(--ruimte-2); margin: 0 calc(var(--ruimte-2) * -1); border-radius: var(--radius);
+    color: var(--kleur-tekst);
+  }
+  a.skill:hover { background: var(--kleur-oppervlak-zacht); color: var(--kleur-tekst); }
+  .skill-nr {
+    flex-shrink: 0; width: 1.5rem; height: 1.5rem; border-radius: 6px; margin-top: 1px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: var(--tekst-xs); font-weight: 600;
+  }
+  .hardskill .skill-nr { background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst); }
+  .softskill .skill-nr { background: var(--tint-paars-bg); color: var(--tint-paars-tekst); }
+  /* Maximaal twee regels; de volledige tekst staat in de tooltip en op de pagina Leeruitkomsten */
+  .skill { align-items: center; }
+  .skill-tekst {
+    flex: 1; min-width: 0; font-size: var(--tekst-sm); font-weight: 600; line-height: 1.35; color: var(--kleur-tekst);
+    overflow-wrap: break-word;   /* lange term mag naar een tweede regel, nooit afgekapt */
+  }
+  /* Kleine voortgangsmeter (nieuwste meting per skill) */
+  .skill-meter { display: flex; align-items: center; gap: var(--ruimte-2); flex-shrink: 0; }
+  .skill-balk { width: 3.5rem; height: 5px; border-radius: 3px; background: var(--kleur-balk-leeg); overflow: hidden; }
+  .skill-vulling { display: block; height: 100%; border-radius: 3px; transform-origin: left center;
+    animation: vullen var(--beweging-vulling) var(--ease-uit) calc(var(--start, 0ms) + var(--beweging-stap) * 6 + 200ms) both; }
+  /* De kleur van de balk volgt de voortgang (inline style, uit Portaal::voortgangKleur) */
+  .skills-meer { display: inline-block; margin-top: var(--ruimte-2); font-size: var(--tekst-sm); font-weight: 600; }
+  .skill-pct { width: 2.4rem; text-align: right; font-size: var(--tekst-xs); font-weight: 700; color: var(--kleur-tekst-subtiel); font-variant-numeric: tabular-nums; }
+
+  /* ===== Mijn leerdoelen ===== */
+  .doel-rij {
+    display: flex; align-items: flex-start; gap: var(--ruimte-3);
+    padding: var(--ruimte-2) 0; border-bottom: 1px solid var(--kleur-lijn);
+  }
+  .doel-rij:first-child { padding-top: 0; }
+  .doel-rij:last-child { border-bottom: none; padding-bottom: 0; }
+  .doel-pil {
+    flex-shrink: 0; min-width: 4.75rem; text-align: center; margin-top: 1px;
+    font-size: var(--tekst-xs); font-weight: 700; padding: 2px var(--ruimte-2); border-radius: 999px;
+  }
+  .doel-pil.open    { background: var(--tint-grijs-bg); color: var(--tint-grijs-tekst); }   /* 9:1 */
+  .doel-pil.bezig   { background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst); }   /* 7.2:1 */
+  .doel-pil.behaald { background: var(--tint-groen-bg); color: var(--tint-groen-tekst); }   /* 6.8:1 */
+  .alle-slb { display: inline-block; margin-top: var(--ruimte-3); font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-op-navy); text-decoration: underline; text-underline-offset: 3px; }
+  .alle-slb:hover { color: #FFFFFF; }
+  .alle-slb:focus-visible { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 3px; border-radius: 4px; }
+  /* Tekst links, stand + balk rechts ernaast; op een smal scherm komt de stand onder de tekst */
+  .doel-inhoud { display: flex; align-items: center; justify-content: space-between; gap: var(--ruimte-4); min-width: 0; flex: 1; flex-wrap: wrap; }
+  .doel-inhoud .doel-tekst { flex: 1 1 14rem; }
+  .doel-stand { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 7.5rem; }
+  .doel-balk { width: 100%; height: 5px; border-radius: 4px; background: var(--kleur-balk-leeg); overflow: hidden; }
+  .doel-vulling { display: block; height: 100%; border-radius: 4px; transform-origin: left center; animation: vullen var(--beweging-vulling) var(--ease-uit) both; }
+  .doel-standnaam { font-size: var(--tekst-xs); font-weight: 700; color: var(--stand-tekst); white-space: nowrap; }
+  :root[data-thema="donker"] .doel-standnaam { color: var(--stand-balk); }
+  .doel-tekst { font-size: var(--tekst-label); font-weight: 500; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+  .doel-rij.behaald .doel-tekst { color: var(--kleur-tekst-subtiel); text-decoration: line-through; }
+
+  /* ===== Mijn begeleiding (donkere kaart) ===== */
+  .kaart--donker { background: var(--kleur-donkere-kaart); border-color: var(--kleur-donkere-kaart-rand); color: var(--kleur-op-navy); }
+  .kaart--donker .kaart-titel { color: var(--kleur-op-navy); }
+  .begeleider { display: flex; align-items: center; gap: var(--ruimte-3); }
+  .begeleider + .begeleider { margin-top: var(--ruimte-3); }
+  .begeleider > div { min-width: 0; }
+  .avatar {
+    width: 2.25rem; height: 2.25rem; border-radius: 50%; flex-shrink: 0;
+    background: #2F6FB8; color: #FFFFFF;                     /* 5.1:1 */
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 600; font-size: var(--tekst-xs);
+  }
+  .avatar { overflow: hidden; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .begeleider-naam { font-size: var(--tekst-label); font-weight: 600; }
+  .begeleider-mail {
+    font-size: var(--tekst-klein); color: var(--kleur-op-navy-zacht); overflow-wrap: anywhere;
+  }
+  .begeleider-mail:hover { color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px; }
+  .kaart--donker a:focus-visible { outline-color: var(--kleur-focus-op-navy); }
+  .scheiding { height: 1px; background: #26446C; margin: var(--ruimte-4) 0; }
+  .afspraken { display: flex; flex-direction: column; gap: var(--ruimte-2); }
+  .afspraak { background: var(--kleur-navy-licht); border-radius: var(--radius); padding: var(--ruimte-3); min-width: 0; }
+  .afspraak-titel { font-size: var(--tekst-sm); font-weight: 600; overflow-wrap: anywhere; }
+  .afspraak-wanneer { font-size: var(--tekst-xs); color: var(--kleur-op-navy-zacht); margin-top: 2px; }
+  .kaart--donker .leeg { color: var(--kleur-op-navy-zacht); }
+
+  /* ===== Recente feedback ===== */
+  .feedback-lijst { display: flex; flex-direction: column; gap: var(--ruimte-4); }
+  .feedback { border-left: 3px solid; padding-left: var(--ruimte-3); min-width: 0; }
+  .feedback-titel { font-size: var(--tekst-sm); font-weight: 600; overflow-wrap: anywhere; }
+  .feedback-sub { font-size: var(--tekst-xs); color: var(--kleur-tekst-subtiel); margin: 2px 0 var(--ruimte-1); }
+  .feedback-tekst { font-size: var(--tekst-sm); color: var(--kleur-tekst-zacht); line-height: 1.5; overflow-wrap: anywhere; }
+
+  /* ===== Knop "Gesprek inplannen" (wordt op andere plekken gebruikt) ===== */
+  .knop-plan { transition: background-color var(--beweging-standaard) var(--ease-uit), transform var(--beweging-snel) var(--ease-uit), box-shadow var(--beweging-standaard) var(--ease-uit); }
+  .knop-plan:hover { background: #4F9BEA !important; transform: translateY(var(--beweging-lift)); box-shadow: 0 6px 14px rgba(63,140,221,.35); }
+  .knop-plan:active { transform: scale(var(--beweging-druk)); box-shadow: 0 2px 6px rgba(63,140,221,.3); }
+  .knop-plan:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 2px; }
+
+  /* ===== Welkomstscherm na inloggen =====
+     Korter dan voorheen (± 1,5 s i.p.v. 2,9 s), met een klik of toets weg te halen, en het blokkeert
+     nooit: na afloop is hij onzichtbaar en klikt alles erdoorheen. Modus "off": wordt overgeslagen. */
+  .welkom {
+    position: fixed; inset: 0; z-index: 9999;
+    display: var(--beweging-overlay);
+    flex-direction: column; align-items: center; justify-content: center; gap: var(--ruimte-2);
+    padding: var(--ruimte-6); text-align: center; cursor: pointer;
+    background: var(--kleur-navy); color: #FFFFFF;
+    animation: uitfaden var(--beweging-overlay-uit) var(--ease-uit) var(--beweging-overlay-wacht) forwards;
+  }
+  .welkom.weg { display: none; }
+  .welkom-logo {
+    position: relative; width: 4.5rem; height: 4.5rem; margin-bottom: var(--ruimte-3);
+    animation: welkom-pop var(--beweging-intrede) var(--ease-uit) both;
+  }
+  .welkom-logo svg { display: block; width: 100%; height: 100%; }
+  /* Eén zachte ring die van het logo wegloopt */
+  .welkom-logo::after {
+    content: ""; position: absolute; inset: 0; border-radius: 20px; opacity: 0;
+    border: 2px solid rgba(255,255,255,.5);
+    animation: welkom-ring calc(var(--beweging-vulling) * 1.25) ease-out calc(var(--beweging-stap) * 6) both;
+  }
+  .welkom-titel {
+    font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem); font-weight: 700; letter-spacing: -0.01em; line-height: 1.2;
+    overflow-wrap: anywhere;
+    animation: opkomen var(--beweging-intrede) var(--ease-uit) calc(var(--beweging-stap) * 3) both;
+  }
+  .welkom-sub {
+    font-size: var(--tekst-basis); color: var(--kleur-op-navy-zacht);
+    animation: opkomen var(--beweging-intrede) var(--ease-uit) calc(var(--beweging-stap) * 5) both;
+  }
+  .welkom-streep {
+    width: 7.5rem; height: 3px; border-radius: 3px; background: rgba(255,255,255,.2); overflow: hidden; margin-top: var(--ruimte-3);
+  }
+  .welkom-streep::after {
+    content: ""; display: block; height: 100%; background: var(--kleur-geel); transform-origin: left center;
+    animation: vullen var(--beweging-overlay-wacht) linear both;
+  }
+  @keyframes welkom-pop { from { opacity: 0; transform: scale(var(--beweging-icoon-schaal)); } to { opacity: 1; transform: none; } }
+  @keyframes welkom-ring { from { opacity: .7; transform: scale(1); } to { opacity: 0; transform: scale(1.8); } }
+  /* Dashboard komt binnen terwijl het welkomstscherm wegfadet */
+  body.met-welkom { --start: calc(var(--beweging-overlay-wacht) * 0.85); }
+
+  /* ===== Telefoon: navigatie onderaan, alles onder elkaar ===== */
+  @media (max-width: 720px) {
+    .pagina { display: block; }
+    .rail, .rail.expanded {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100% !important;
+      height: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+      flex-direction: row; align-items: center; padding: 0 6px env(safe-area-inset-bottom, 0px); z-index: 60;
+      border-top: 1px solid #22385A; transition: none; overflow: visible;
+    }
+    .rail > div:first-child, .rail > button { display: none !important; }
+    .rail > div:nth-of-type(2) { flex: 1; flex-direction: row !important; justify-content: space-around; padding: 0 !important; gap: 0 !important; }
+    .rail > div:nth-of-type(2) .navitem { padding: 12px 13px !important; box-shadow: none !important; }
+    .rail > div:nth-of-type(2) .navitem[style*="background: #213A5E"],
+    .rail > div:nth-of-type(2) .navitem[aria-current="page"] { box-shadow: inset 0 -3px 0 #FEBD3A !important; border-radius: 8px 8px 0 0 !important; }
+    .rail > div:nth-of-type(3) { margin-top: 0 !important; padding: 0 4px !important; }
+    .rail-label, .rail.expanded .rail-label { display: none !important; }
+    .hoofdinhoud { padding: var(--ruimte-4) var(--ruimte-4) calc(5.25rem + env(safe-area-inset-bottom, 0px)); }
+    .hoofdinhoud-binnen { margin: 0 auto; }
+    table.fases { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body class="dashboard met-welkom">
+<div id="demo-balk" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#FEF3C7;color:#92400E;font:600 13px/1.4 system-ui,sans-serif;padding:6px 12px;text-align:center">Demo: dit is een vaste weergave van de student-omgeving. Wijzigingen worden niet opgeslagen.</div>
+<script>
+document.addEventListener('submit',function(e){e.preventDefault();var b=document.getElementById('demo-balk');if(b){b.style.background='#FBC6CA';b.textContent='Dit is een demo: hier kan niets worden opgeslagen.';setTimeout(function(){b.style.background='#FEF3C7';b.textContent='Demo: dit is een vaste weergave van de student-omgeving. Wijzigingen worden niet opgeslagen.'},2500)}},true);
+</script>
+<style>body{padding-top:30px}</style>
+
+<div class="welkom" id="welkom" aria-live="polite" title="Klik om door te gaan">
+  <div class="welkom-logo"><svg width="72" height="72" viewBox="0 0 112 112" aria-hidden="true" focusable="false"><rect x="10" y="10" width="96" height="96" rx="18" fill="#1C2340"/><rect x="4" y="4" width="96" height="96" rx="18" fill="#3F8CDD" stroke="#1C2340" stroke-width="4"/><rect x="20" y="58" width="16" height="26" rx="3" fill="#F1EBF7" stroke="#1C2340" stroke-width="3.5"/><rect x="42" y="44" width="16" height="40" rx="3" fill="#FEBD3A" stroke="#1C2340" stroke-width="3.5"/><rect x="64" y="28" width="16" height="56" rx="3" fill="#F66169" stroke="#1C2340" stroke-width="3.5"/></svg></div>
+  <div class="welkom-titel">Welkom terug, Jair!</div>
+  <div class="welkom-sub">Fijn dat je er weer bent. Jouw ontwikkeling staat klaar.</div>
+  <div class="welkom-streep" aria-hidden="true"></div>
+</div>
+<script>
+  // Welkomstscherm: weghalen zodra hij is uitgefaded, bij een klik of toets, of als de modus "off" is.
+  (function () {
+    var welkom = document.getElementById('welkom');
+    if (!welkom) return;
+    var klaar = false;
+    function weg() {
+      if (klaar) return; klaar = true;
+      welkom.remove();
+      document.removeEventListener('keydown', weg);
+    }
+    welkom.addEventListener('animationend', function (e) { if (e.animationName === 'uitfaden') weg(); });
+    welkom.addEventListener('click', weg);
+    document.addEventListener('keydown', weg);
+    if (getComputedStyle(welkom).display === 'none') weg();     // modus "off"
+    setTimeout(weg, 4000);                                       // vangnet: blijft nooit hangen
+  })();
+</script>
+
+<a href="#inhoud" class="sla-over">Naar de inhoud</a>
+
+<div class="pagina">
+
+  <!-- ===== Navigatierail (inklapbaar) ===== -->
+  <div class="rail" id="navRail">
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 14px; margin-bottom: 20px; min-width: 0">
+      <svg width="30" height="30" viewBox="0 0 104 104" style="flex-shrink:0;display:block" aria-hidden="true"><rect x="4" y="4" width="96" height="96" rx="18" fill="#3F8CDD" stroke="#1C2340" stroke-width="4"/><rect x="20" y="58" width="16" height="26" rx="3" fill="#F1EBF7" stroke="#1C2340" stroke-width="3.5"/><rect x="42" y="44" width="16" height="40" rx="3" fill="#FEBD3A" stroke="#1C2340" stroke-width="3.5"/><rect x="64" y="28" width="16" height="56" rx="3" fill="#F66169" stroke="#1C2340" stroke-width="3.5"/></svg>
+      <div class="rail-label" style="font-weight: 700; color: #FFFFFF; font-size: 13px; overflow: hidden">ITIG Portal</div>
+    </div>
+
+    <button id="navToggle" aria-label="Menu in- of uitklappen" style="margin: 0 14px 18px; width: 28px; height: 28px; border-radius: 7px; border: 1px solid #2B4A75; background: transparent; color: #86A9D6; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+    </button>
+
+    <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 10px">
+                                  <a href="index.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; background: #213A5E; box-shadow: inset 3px 0 0 #FEBD3A;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+            <span class="rail-label" style="color: #FFFFFF; font-size: 12.5px; font-weight: 600">Dashboard</span>
+          </a>
+                                          <a href="leeruitkomsten.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z"></path><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"></path></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Leeruitkomsten</span>
+          </a>
+                                          <a href="leerdoelen.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Leerdoelen</span>
+          </a>
+                                          <a href="begeleiding.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Student-docentrelatie</span>
+          </a>
+                                          <a href="feedback.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Feedback</span>
+          </a>
+                  </div>
+
+    <!-- Profiel: wie er ingelogd is. Uitloggen zelf staat nu ook bovenaan de pagina. -->
+    <div style="margin-top: auto; padding: 0 10px">
+            <a  href="profiel.html" title="Mijn profiel"  class="navitem gebruikerlink" style="display: flex; align-items: center; gap: 9px; padding: 6px 4px; min-width: 0; border-radius: 8px; ">
+                  <div style="width: 28px; height: 28px; border-radius: 50%; background: #60ACE1; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: #0E2240; font-size: 10.5px; flex-shrink: 0">JM</div>
+                <div class="rail-label" style="overflow: hidden">
+          <div style="color: #FFFFFF; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Jair Modiwirijo</div>
+          <div style="color: #7F9AC0; font-size: 10.5px; white-space: nowrap">Student</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+
+  <main class="hoofdinhoud" id="inhoud" tabindex="-1">
+  <div class="hoofdinhoud-binnen">
+
+    <header class="dash-kop intrede" style="--i:0">
+      <div>
+        <p class="dash-datum">30 okt 2026 — Periode 1, 2026/2027</p>
+        <h1 class="dash-titel">Welkom terug, Jair</h1>
+      </div>
+      <form method="POST" action="#" style="margin: 0">
+<input type="hidden" name="_token" value="" autocomplete="off">        <button type="submit" class="knop knop--secundair header-uitlog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Uitloggen
+        </button>
+      </form>
+    </header>
+
+    <!-- Statistiektegels -->
+    <section class="stats" aria-label="Overzicht">
+
+      <div class="kaart tegel intrede" style="--i:1">
+        <div class="tegel-kop">
+          <p class="tegel-label">Mijn ontwikkelfase</p>
+          <span class="tegel-icoon tegel-icoon--blauw"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
+        </div>
+        <p class="tegel-waarde">Verdiepingsfase</p>
+        <p class="tegel-meta">8 hard, 8 soft</p>
+      </div>
+
+      <div class="kaart tegel intrede" style="--i:2">
+        <div class="tegel-kop">
+          <p class="tegel-label">Leerdoelen behaald</p>
+          <span class="tegel-icoon tegel-icoon--groen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></span>
+        </div>
+        <p class="tegel-waarde tegel-waarde--getal"><span class="telt">0</span> <span class="tegel-waarde-van">/ 0</span></p>
+      </div>
+
+      <div class="kaart tegel intrede" style="--i:3">
+        <div class="tegel-kop">
+          <p class="tegel-label">Volgend gesprek</p>
+          <span class="tegel-icoon tegel-icoon--geel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span>
+        </div>
+        <p class="tegel-waarde">Niet gepland</p>
+        <p class="tegel-meta">Plan een gesprek via Student-docentrelatie</p>
+      </div>
+
+      <div class="kaart tegel intrede" style="--i:4">
+        <div class="tegel-kop">
+          <p class="tegel-label">Feedback ontvangen</p>
+          <span class="tegel-icoon tegel-icoon--paars"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span>
+        </div>
+        <p class="tegel-waarde tegel-waarde--getal"><span class="telt">0</span></p>
+        <p class="tegel-meta">Nog geen feedback</p>
+      </div>
+    </section>
+
+    <!-- Twee kolommen (onder elkaar als de ruimte te smal is) -->
+    <div class="dash-raster">
+
+      <!-- Linkerkolom -->
+      <div class="dash-kolom">
+
+        <!-- Skills-overzicht: waar sta ik, en de hard- en softskills van mijn fase -->
+        <section class="kaart intrede" style="--i:5" aria-labelledby="titel-lu">
+          <div class="kaart-kop">
+            <h2 class="kaart-titel" id="titel-lu">Mijn skills <span class="kaart-titel-sub">· Verdiepingsfase</span></h2>
+                        <a href="leeruitkomsten.html" class="kaart-link">Alle leeruitkomsten<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
+                      </div>
+
+
+                    <div class="skills">
+                          <div class="hardskill">
+                <div class="skills-kop">
+                  <h3 class="skills-titel"><span class="stip" aria-hidden="true"></span>Hardskills <span class="aantal">3 van 8</span></h3>
+                </div>
+                <ul class="lijst">
+                                      <li>
+                                            <a class="skill" href="leeruitkomsten.html" title="Na de verdiepende fase kan ik complexe taken uitvoeren binnen mijn vakgebied, zoals het installeren, plannen of configureren van systemen, software of processen. Dit doe ik onder beperkte begeleiding van mijn docent of begeleider.">
+                                              <span class="skill-nr" aria-hidden="true">1</span>
+                        <span class="skill-tekst"><span class="sr-only">Hardskill 1: </span>Complexe taken uitvoeren</span>
+                                                  <span class="skill-meter" aria-hidden="true"><span class="skill-balk"><span class="skill-vulling" style="width: 10%; background: #D0414B"></span></span><span class="skill-pct">10%</span></span>
+                          <span class="sr-only">, voortgang 10%</span>
+                                                                    </a>
+                                          </li>
+                                      <li>
+                                            <a class="skill" href="leeruitkomsten.html" title="Na de verdiepende fase kan ik afwijkingen en problemen signaleren en deze gestructureerd en logisch analyseren, met beperkte ondersteuning waar nodig.">
+                                              <span class="skill-nr" aria-hidden="true">2</span>
+                        <span class="skill-tekst"><span class="sr-only">Hardskill 2: </span>Problemen analyseren</span>
+                                                  <span class="skill-meter" aria-hidden="true"><span class="skill-balk"><span class="skill-vulling" style="width: 25%; background: #F08A24"></span></span><span class="skill-pct">25%</span></span>
+                          <span class="sr-only">, voortgang 25%</span>
+                                                                    </a>
+                                          </li>
+                                      <li>
+                                            <a class="skill" href="leeruitkomsten.html" title="Na de verdiepende fase kan ik data analyseren en interpreteren. Ik gebruik deze inzichten om verbeteringen voor te stellen binnen processen, applicaties of systemen en maak keuzes en resultaten bespreekbaar, onder beperkte begelei">
+                                              <span class="skill-nr" aria-hidden="true">6</span>
+                        <span class="skill-tekst"><span class="sr-only">Hardskill 6: </span>Data-analyse</span>
+                                                  <span class="skill-meter" aria-hidden="true"><span class="skill-balk"><span class="skill-vulling" style="width: 15%; background: #D0414B"></span></span><span class="skill-pct">15%</span></span>
+                          <span class="sr-only">, voortgang 15%</span>
+                                                                    </a>
+                                          </li>
+                                  </ul>
+                                  <a class="kaart-link skills-meer" href="leeruitkomsten.html">Bekijk alle 8</a>
+                              </div>
+                          <div class="softskill">
+                <div class="skills-kop">
+                  <h3 class="skills-titel"><span class="stip" aria-hidden="true"></span>Softskills <span class="aantal">3 van 8</span></h3>
+                </div>
+                <ul class="lijst">
+                                      <li>
+                                            <a class="skill" href="leeruitkomsten.html" title="Na de verdiepende fase kan ik zelfstandig mijn keuzes en acties onderbouwen op basis van argumentatie en feedback. Ik pas mijn werkwijze aan op basis van reflectie en input van collega’s, opdrachtgevers en stakeholders.">
+                                              <span class="skill-nr" aria-hidden="true">1</span>
+                        <span class="skill-tekst"><span class="sr-only">Softskill 1: </span>Onderbouwen en bijsturen</span>
+                                                  <span class="skill-meter" aria-hidden="true"><span class="skill-balk"><span class="skill-vulling" style="width: 20%; background: #D0414B"></span></span><span class="skill-pct">20%</span></span>
+                          <span class="sr-only">, voortgang 20%</span>
+                                                                    </a>
+                                          </li>
+                                      <li>
+                                            <a class="skill" href="leeruitkomsten.html" title="Na de verdiepende fase kan ik creatieve denkvaardigheden zelfstandig toepassen en innovatieve oplossingen ontwikkelen voor technische en niet-technische uitdagingen. Ik experimenteer met nieuwe methodes en technologieën om process">
+                                              <span class="skill-nr" aria-hidden="true">3</span>
+                        <span class="skill-tekst"><span class="sr-only">Softskill 3: </span>Creativiteit en innovatie</span>
+                                                  <span class="skill-meter" aria-hidden="true"><span class="skill-balk"><span class="skill-vulling" style="width: 25%; background: #F08A24"></span></span><span class="skill-pct">25%</span></span>
+                          <span class="sr-only">, voortgang 25%</span>
+                                                                    </a>
+                                          </li>
+                                      <li>
+                                            <a class="skill" href="leeruitkomsten.html" title="Na de verdiepende fase kan ik helder en doelgericht communiceren over technische en niet-technische onderwerpen en mijn boodschap afstemmen op mijn publiek. Ik geef en ontvang constructieve feedback en verwerk deze in mijn werk.">
+                                              <span class="skill-nr" aria-hidden="true">4</span>
+                        <span class="skill-tekst"><span class="sr-only">Softskill 4: </span>Doelgericht communiceren</span>
+                                                  <span class="skill-meter" aria-hidden="true"><span class="skill-balk"><span class="skill-vulling" style="width: 20%; background: #D0414B"></span></span><span class="skill-pct">20%</span></span>
+                          <span class="sr-only">, voortgang 20%</span>
+                                                                    </a>
+                                          </li>
+                                  </ul>
+                                  <a class="kaart-link skills-meer" href="leeruitkomsten.html">Bekijk alle 8</a>
+                              </div>
+                      </div>
+                  </section>
+
+        <!-- Mijn leerdoelen: bezig bovenaan, maximaal vijf -->
+        <section class="kaart intrede" style="--i:6" aria-labelledby="titel-doelen">
+          <div class="kaart-kop">
+            <h2 class="kaart-titel" id="titel-doelen">Mijn leerdoelen</h2>
+                        <a href="leerdoelen.html" class="kaart-link">Alle leerdoelen <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="9 18 15 12 9 6"></polyline></svg></a>
+                      </div>
+          <ul class="lijst">
+                        <li class="leeg">Je hebt nog geen leerdoelen.
+              <a href="leerdoelen.html">Voeg je eerste leerdoel toe</a>            </li>
+                      </ul>
+        </section>
+
+      </div>
+
+      <!-- Rechterkolom -->
+      <div class="dash-kolom">
+
+        <!-- Begeleiding: zelfde data als begeleiding.php -->
+        <section class="kaart kaart--donker intrede" style="--i:7" aria-labelledby="titel-begeleiding">
+          <h2 class="kaart-titel" id="titel-begeleiding" style="margin-bottom: var(--ruimte-4)">Mijn begeleiding</h2>
+
+                    <div>
+                          <div class="begeleider">
+                                <div class="avatar" aria-hidden="true">BA</div>
+                <div>
+                  <p class="begeleider-naam">Bert Annink</p>
+                  <a href="mailto:bert.annink@itig.nl" class="begeleider-mail">bert.annink@itig.nl</a>
+                </div>
+              </div>
+                          <div class="begeleider">
+                                <div class="avatar" aria-hidden="true">GP</div>
+                <div>
+                  <p class="begeleider-naam">Guus Pjekman</p>
+                  <a href="mailto:guus.pjekman@itig.nl" class="begeleider-mail">guus.pjekman@itig.nl</a>
+                </div>
+              </div>
+                      </div>
+                      <a href="begeleiding.html#titel-slb" class="alle-slb">Alle SLB'ers bekijken (+4)</a>
+          
+          <div class="scheiding" aria-hidden="true"></div>
+
+          <div class="afspraken">
+                          <p class="leeg">Nog geen geplande gesprekken.</p>
+                      </div>
+          
+        </section>
+
+        <!-- Feedback -->
+        <section class="kaart intrede" style="--i:8" aria-labelledby="titel-feedback">
+          <h2 class="kaart-titel" id="titel-feedback" style="margin-bottom: var(--ruimte-4)">Recente feedback</h2>
+
+          <div class="feedback-lijst">
+                          <p class="leeg">Nog geen feedback ontvangen.</p>
+                      </div>
+        </section>
+
+      </div>
+    </div>
+
+  </div>
+  </main>
+</div>
+
+<script>
+  // Navigatiebalk in- en uitklappen. aria-expanded vertelt schermlezers of hij open is.
+  (function () {
+    var rail = document.getElementById('navRail');
+    var toggle = document.getElementById('navToggle');
+    if (!rail || !toggle) return;
+    toggle.setAttribute('aria-expanded', rail.classList.contains('expanded') ? 'true' : 'false');
+    toggle.setAttribute('aria-controls', 'navRail');
+    toggle.addEventListener('click', function () {
+      var open = rail.classList.toggle('expanded');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  })();
+</script>
+
+<script>
+  // Getallen laten optellen — alleen in modus "standard". De kaarten, balken en het welkomstscherm
+  // animeren met CSS via de bewegingstokens, dus daarvoor is hier geen code nodig.
+  (function () {
+    if (!window.POO || !POO.beweging || POO.beweging.effectief() !== 'standard') return;
+    if (!window.requestAnimationFrame) return;
+
+    var stijl = getComputedStyle(document.documentElement);
+    var ms = function (naam) { return parseFloat(stijl.getPropertyValue(naam)) || 0; };
+    var start = document.getElementById('welkom') ? ms('--beweging-overlay-wacht') * 0.85 : 0;
+    var stap = ms('--beweging-stap');
+
+    document.querySelectorAll('.telt').forEach(function (el) {
+      var tekst = el.textContent.trim();
+      var waarde = parseFloat(tekst.replace(',', '.'));
+      if (isNaN(waarde) || waarde === 0) return;
+      var decimalen = tekst.indexOf(',') > -1 ? tekst.split(',')[1].length : 0;
+
+      // Schermlezers lezen meteen het echte getal; het optellen is alleen visueel.
+      var echt = document.createElement('span');
+      echt.className = 'sr-only';
+      echt.textContent = tekst;
+      el.parentNode.insertBefore(echt, el);
+      el.setAttribute('aria-hidden', 'true');
+
+      var tegel = el.closest('.intrede');
+      var i = tegel ? parseFloat(tegel.style.getPropertyValue('--i')) || 0 : 0;
+      var duur = 800;
+      el.textContent = (0).toFixed(decimalen).replace('.', ',');
+
+      setTimeout(function () {
+        var t0 = null;
+        function frame(nu) {
+          if (t0 === null) t0 = nu;
+          var p = Math.min((nu - t0) / duur, 1), e = 1 - Math.pow(1 - p, 3);
+          el.textContent = (waarde * e).toFixed(decimalen).replace('.', ',');
+          if (p < 1) requestAnimationFrame(frame); else el.textContent = tekst;
+        }
+        requestAnimationFrame(frame);
+      }, start + i * stap + 150);
+    });
+  })();
+</script>
+
+</body>
+</html>

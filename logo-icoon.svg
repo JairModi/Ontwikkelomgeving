@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 112" width="112" height="112" role="img" aria-label="Ontwikkelomgeving logo">
+  <rect x="10" y="10" width="96" height="96" rx="18" fill="#1C2340"/>
+  <rect x="4" y="4" width="96" height="96" rx="18" fill="#3F8CDD" stroke="#1C2340" stroke-width="4"/>
+  <rect x="20" y="58" width="16" height="26" rx="3" fill="#F1EBF7" stroke="#1C2340" stroke-width="3.5"/>
+  <rect x="42" y="44" width="16" height="40" rx="3" fill="#FEBD3A" stroke="#1C2340" stroke-width="3.5"/>
+  <rect x="64" y="28" width="16" height="56" rx="3" fill="#F66169" stroke="#1C2340" stroke-width="3.5"/>
+</svg>

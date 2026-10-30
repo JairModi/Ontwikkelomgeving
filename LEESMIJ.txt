@@ -1,0 +1,5 @@
+Student-omgeving (vaste demo voor GitHub Pages)
+1. Zet alle bestanden in een GitHub-repository.
+2. Settings > Pages > Deploy from a branch > kies branch en map (root).
+3. Na een minuut staat de site op https://<naam>.github.io/<repo>/
+Dit is een vaste weergave: er wordt niets opgeslagen.

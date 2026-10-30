@@ -1,0 +1,2400 @@
+<!doctype html>
+<html lang="nl" class="no-js">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="portaal/logo-icoon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Leeruitkomsten — Persoonlijke Ontwikkelomgeving</title>
+<script>
+  /* =====================================================================
+     BEWEGINGSVOORKEUR — moet in de <head> staan, vóór de pagina getekend wordt,
+     anders zie je heel even de standaardanimaties voordat de voorkeur actief is.
+
+     Modi op <html data-motion="...">:
+       (geen attribuut) = volg de systeeminstelling (prefers-reduced-motion)
+       standard         = volledige animaties
+       reduced          = korte, eenvoudige overgangen zonder verschuiving
+       off              = geen niet-noodzakelijke animaties of overgangen
+
+     Volgorde waarin de voorkeur bepaald wordt:
+       1. data-motion staat al in de HTML (later: door de server uit het account)
+       2. keuze die in deze browser is opgeslagen (localStorage)
+       3. niets: de systeeminstelling bepaalt het
+     ===================================================================== */
+  (function () {
+    var root = document.documentElement;
+    root.className = 'js'; // zo kan CSS onderdelen verbergen die alleen met JavaScript werken
+
+    var MODI = ['standard', 'reduced', 'off'];
+    var SLEUTEL = 'poo-beweging';
+
+    function leesLokaal() { try { return localStorage.getItem(SLEUTEL); } catch (e) { return null; } }
+    function schrijfLokaal(m) {
+      try { if (m) localStorage.setItem(SLEUTEL, m); else localStorage.removeItem(SLEUTEL); } catch (e) {}
+    }
+    function pasToe(m) {
+      if (MODI.indexOf(m) > -1) root.setAttribute('data-motion', m);
+      else root.removeAttribute('data-motion');
+    }
+
+    if (!root.hasAttribute('data-motion')) pasToe(leesLokaal());
+
+    // Eén centrale ingang voor de hele app. Een instellingenmenu roept later POO.beweging.zet(...) aan.
+    window.POO = window.POO || {};
+    window.POO.beweging = {
+      modi: ['systeem'].concat(MODI),
+      // De gekozen voorkeur: 'systeem', 'standard', 'reduced' of 'off'
+      voorkeur: function () { return root.getAttribute('data-motion') || 'systeem'; },
+      // Wat er echt gebeurt: de strengste van (voorkeur, systeeminstelling)
+      effectief: function () {
+        var m = root.getAttribute('data-motion');
+        if (m === 'off') return 'off';
+        if (m === 'reduced' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 'reduced';
+        return 'standard';
+      },
+      zet: function (m) {
+        if (m !== 'systeem' && MODI.indexOf(m) === -1) throw new Error('Onbekende bewegingsmodus: ' + m);
+        pasToe(m);
+        schrijfLokaal(m === 'systeem' ? null : m);
+        root.dispatchEvent(new CustomEvent('poo:beweging', { detail: { voorkeur: m } }));
+      }
+    };
+  })();
+
+  /* =====================================================================
+     THEMAVOORKEUR (licht / donker) — zelfde opzet als de bewegingsvoorkeur.
+       licht   = standaard
+       donker  = donkere kleuren
+       systeem = volg de instelling van het apparaat (prefers-color-scheme)
+     De keuze staat in deze browser (localStorage 'poo-thema'). Op <html> komt data-thema="donker"
+     als het donker moet zijn; de CSS hieronder vult dan de donkere kleuren in.
+     ===================================================================== */
+  (function () {
+    var root = document.documentElement;
+    var SLEUTEL = 'poo-thema';
+    var MODI = ['licht', 'donker', 'systeem'];
+    var systeemDonker = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function lees() { try { return localStorage.getItem(SLEUTEL) || 'licht'; } catch (e) { return 'licht'; } }
+    function schrijf(m) { try { localStorage.setItem(SLEUTEL, m); } catch (e) {} }
+    function pasToe(m) {
+      var donker = m === 'donker' || (m === 'systeem' && systeemDonker && systeemDonker.matches);
+      if (donker) root.setAttribute('data-thema', 'donker'); else root.removeAttribute('data-thema');
+    }
+
+    pasToe(lees());
+    // Staat "systeem" aan en verandert het apparaat van licht naar donker (bijv. 's avonds)? Meteen meegaan.
+    if (systeemDonker && systeemDonker.addEventListener) {
+      systeemDonker.addEventListener('change', function () { if (lees() === 'systeem') pasToe('systeem'); });
+    }
+
+    window.POO = window.POO || {};
+    window.POO.thema = {
+      modi: MODI,
+      voorkeur: lees,                                            // 'licht', 'donker' of 'systeem'
+      donker: function () { return root.getAttribute('data-thema') === 'donker'; },
+      zet: function (m) {
+        if (MODI.indexOf(m) === -1) throw new Error('Onbekend thema: ' + m);
+        schrijf(m);
+        pasToe(m);
+        root.dispatchEvent(new CustomEvent('poo:thema', { detail: { voorkeur: m } }));
+      }
+    };
+  })();
+</script>
+<style>
+  /* =====================================================================
+     DESIGN TOKENS — contrast nagerekend (WCAG 2.2 AA):
+     tekst ≥ 4.5:1, randen/focus/iconen ≥ 3:1.
+     ===================================================================== */
+  :root {
+    /* Merkkleuren */
+    --kleur-navy: #15233A;
+    --kleur-navy-licht: #1E3A5F;
+    --kleur-navy-hover: #213A5E;
+    --kleur-blauw: #60ACE1;
+    --kleur-blauw-donker: #3F8CDD;
+    --kleur-blauw-focus: #1F6FC2;        /* 5.1:1 op wit, 4.4:1 op lila */
+    --kleur-geel: #FEBD3A;
+    --kleur-rood: #F66169;
+    --kleur-lila: #F1EBF7;
+
+    /* Interfacekleuren */
+    --kleur-achtergrond: var(--kleur-lila);
+    --kleur-oppervlak: #FFFFFF;
+    --kleur-oppervlak-zacht: #F7F4FB;    /* lichte vlakjes binnen een kaart */
+    --kleur-rand: #E4DCEE;
+    --kleur-rand-veld: #8B8FA6;          /* 3.2:1 op wit */
+    --kleur-rand-veld-hover: #6B7088;
+    --kleur-tekst: #161B26;              /* 17:1 op wit */
+    --kleur-tekst-zacht: #4B5468;        /* 7.6:1 op wit */
+    --kleur-tekst-subtiel: #5B6477;      /* 5.9:1 op wit: metadata, datums */
+    --kleur-icoon: #5B6477;
+    --kleur-link: #1F6FC2;               /* 5.1:1 op wit (#3F8CDD haalde maar 3.6:1) */
+    --kleur-link-hover: #17589C;
+    --kleur-op-navy: #FFFFFF;
+    --kleur-op-navy-zacht: #A9BDDA;      /* 8.2:1 op navy */
+    --kleur-op-navy-subtiel: #8FA6C8;    /* 6.3:1 op navy */
+    --kleur-focus-op-navy: #8EC1EE;      /* focusring op donkere vlakken: 8:1 */
+    --kleur-knop-tekst: #0B1A30;         /* 7:1 op blauw, 5:1 op blauw-donker */
+    --kleur-fout: #B91C1C;               /* 6.5:1 op wit */
+    --kleur-fout-achtergrond: #FEF2F2;
+    --kleur-fout-rand: #F8B4B8;
+    --kleur-waarschuwing: #8A5A00;       /* 5.9:1 op wit */
+    --kleur-skelet: #ECE6F3;
+    --kleur-skelet-glans: #F7F3FB;
+    --kleur-lijn: #F1ECF6;               /* dunne scheidingslijnen binnen een kaart */
+    --kleur-balk-leeg: #EEE8F5;          /* lege voortgangsbalk */
+    --kleur-donkere-kaart: var(--kleur-navy); /* donkere accentkaart (bijv. Mijn begeleiding) */
+    --kleur-donkere-kaart-rand: var(--kleur-navy);
+    --kleur-actief-vlak: var(--kleur-navy);   /* gekozen knop / fase (wit erop) */
+
+    /* Getinte labels en icoontjes: achtergrond + tekst (contrast ≥ 4.5:1 in beide thema's) */
+    --tint-blauw-bg: #DCEBFA;   --tint-blauw-tekst: #1E5FA8;
+    --tint-paars-bg: #EDE9FE;   --tint-paars-tekst: #5B21B6;
+    --tint-groen-bg: #D1FAE5;   --tint-groen-tekst: #065F46;
+    --tint-geel-bg: #FEF3C7;    --tint-geel-tekst: #92400E;
+    --tint-grijs-bg: #E5E7EB;   --tint-grijs-tekst: #374151;
+    --tint-rood-bg: #FEF1F2;    --tint-rood-rand: #FBC6CA;
+    color-scheme: light;
+
+    /* Typografie — alles in rem, zodat de lettergrootte van de gebruiker meetelt */
+    --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+    --tekst-xs: 0.75rem;        /* 12px: alleen codes en kleine labels */
+    --tekst-klein: 0.8125rem;   /* 13px: metadata */
+    --tekst-sm: 0.875rem;       /* 14px: meldingen, secundaire tekst */
+    --tekst-label: 0.9375rem;   /* 15px: labels, lijstregels */
+    --tekst-basis: 1rem;        /* 16px: gewone tekst */
+    --tekst-veld: max(16px, 1rem); /* nooit onder 16px: anders zoomt iPhone in bij typen */
+
+    /* Ruimte: stappen van 0.25rem (4px) */
+    --ruimte-1: 0.25rem; --ruimte-2: 0.5rem;  --ruimte-3: 0.75rem; --ruimte-4: 1rem;
+    --ruimte-5: 1.25rem; --ruimte-6: 1.5rem;  --ruimte-8: 2rem;     --ruimte-10: 2.5rem;
+    --ruimte-12: 3rem;   --ruimte-14: 3.5rem;
+
+    /* Vormen */
+    --radius-klein: 6px;
+    --radius: 8px;
+    --radius-groot: 12px;
+    --hoogte-bediening: 2.75rem;        /* 44px: ook een prettig tikdoel op touchscreens */
+    --hoogte-bediening-groot: 3rem;     /* 48px */
+    --schaduw-vlak: 0 1px 3px rgba(21,35,58,0.06), 0 1px 2px rgba(21,35,58,0.04);
+
+    /* Easing: hetzelfde voor de hele app */
+    --ease-uit: cubic-bezier(0.2, 0.7, 0.2, 1);    /* snel starten, zacht landen */
+    --ease-in-uit: cubic-bezier(0.45, 0, 0.25, 1); /* heen-en-weer */
+
+    /* ===== BEWEGING — modus "standard" =====
+       Componenten gebruiken ALLEEN deze tokens. De modi hieronder vullen ze anders in,
+       dus een component hoeft nooit zelf te weten welke modus actief is. */
+    --beweging-snel: 120ms;          /* hover, kleur, feedback op een klik */
+    --beweging-standaard: 200ms;     /* focus, meldingen, icoonwissel, uitklappen */
+    --beweging-intrede: 480ms;       /* binnenkomst van een onderdeel */
+    --beweging-stap: 50ms;           /* vertraging tussen opeenvolgende onderdelen */
+    --beweging-afstand: 8px;         /* verschuiving bij binnenkomst */
+    --beweging-afstand-klein: 4px;   /* verschuiving van meldingen */
+    --beweging-lift: -1px;           /* knop omhoog bij hover */
+    --beweging-druk: 0.985;          /* knop bij indrukken */
+    --beweging-icoon-draai: 12deg;
+    --beweging-icoon-schaal: 0.8;
+    --beweging-sfeer: running;       /* decoratieve achtergrond- en glansanimaties */
+    --beweging-spinner: 0.8s;        /* één rondje van de laadspinner */
+    --beweging-schud: 6px;           /* hoe ver een fout veld heen en weer trilt */
+    --beweging-schud-duur: 420ms;
+    --beweging-vulling: 800ms;       /* voortgangsbalken die vollopen */
+    --beweging-overlay: flex;        /* welkomstscherm: tonen (flex) of overslaan (none) */
+    --beweging-overlay-wacht: 1100ms;/* hoe lang een welkomstscherm blijft staan */
+    --beweging-overlay-uit: 350ms;   /* hoe lang het wegfaden duurt */
+  }
+
+  /* ===== Modus "reduced": kort, alleen infaden, geen verschuiving of sfeer ===== */
+  :root[data-motion="reduced"] {
+    --beweging-snel: 80ms;  --beweging-standaard: 120ms; --beweging-intrede: 200ms; --beweging-stap: 0ms;
+    --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+    --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 1.6s;
+    --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+    --beweging-overlay: flex; --beweging-overlay-wacht: 500ms; --beweging-overlay-uit: 200ms;
+  }
+  /* Systeeminstelling "minder beweging" geeft minimaal "reduced", ook als iemand "standard" kiest.
+     (Zelfde waarden als hierboven; CSS kan een media query en een selector niet in één regel combineren.) */
+  @media (prefers-reduced-motion: reduce) {
+    :root:not([data-motion="off"]) {
+      --beweging-snel: 80ms;  --beweging-standaard: 120ms; --beweging-intrede: 200ms; --beweging-stap: 0ms;
+      --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+      --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 1.6s;
+      --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+      --beweging-overlay: flex; --beweging-overlay-wacht: 500ms; --beweging-overlay-uit: 200ms;
+    }
+  }
+  /* ===== Modus "off": alles direct. Staatwijzigingen (kleur, focus, meldingen, laadtekst) blijven zichtbaar. ===== */
+  :root[data-motion="off"] {
+    --beweging-snel: 0ms;   --beweging-standaard: 0ms;   --beweging-intrede: 0ms;   --beweging-stap: 0ms;
+    --beweging-afstand: 0px; --beweging-afstand-klein: 0px; --beweging-lift: 0px; --beweging-druk: 1;
+    --beweging-icoon-draai: 0deg; --beweging-icoon-schaal: 1; --beweging-sfeer: paused; --beweging-spinner: 0s;
+    --beweging-schud: 0px; --beweging-schud-duur: 0ms; --beweging-vulling: 0ms;
+    --beweging-overlay: none; --beweging-overlay-wacht: 0ms; --beweging-overlay-uit: 0ms;
+  }
+
+  /* ===== DONKER THEMA: alleen de tokens krijgen een andere waarde; onderdelen hoeven niets te weten ===== */
+  :root[data-thema="donker"] {
+    --kleur-achtergrond: #0E1524;
+    --kleur-oppervlak: #172134;
+    --kleur-oppervlak-zacht: #1D2940;
+    --kleur-rand: #2A3852;
+    --kleur-rand-veld: #5D6A84;          /* 3.3:1 op oppervlak */
+    --kleur-rand-veld-hover: #7A87A1;
+    --kleur-tekst: #E8EDF5;              /* 14:1 */
+    --kleur-tekst-zacht: #BAC5D8;        /* 9:1 */
+    --kleur-tekst-subtiel: #97A4BA;      /* 6.3:1 */
+    --kleur-icoon: #97A4BA;
+    --kleur-link: #82BCF2;               /* 7.6:1 */
+    --kleur-link-hover: #A9D1F7;
+    --kleur-blauw-focus: #82BCF2;
+    --kleur-lila: #222E46;
+    --kleur-fout: #FCA5A5;
+    --kleur-fout-achtergrond: #3A1E26;
+    --kleur-fout-rand: #7F2A35;
+    --kleur-waarschuwing: #F5C66B;
+    --kleur-skelet: #222E46;
+    --kleur-skelet-glans: #2B3954;
+    --kleur-lijn: #243048;
+    --kleur-balk-leeg: #2A3852;
+    --kleur-donkere-kaart: #101A2B;
+    --kleur-donkere-kaart-rand: #2A3852;
+    --kleur-actief-vlak: #2B5C96;             /* blauw i.p.v. navy: navy valt weg op een donkere kaart (wit erop 6.6:1) */
+    --schaduw-vlak: 0 1px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
+
+    --tint-blauw-bg: rgba(96,172,225,0.16);  --tint-blauw-tekst: #9CCBF5;
+    --tint-paars-bg: rgba(139,92,246,0.20);  --tint-paars-tekst: #C9B8FD;
+    --tint-groen-bg: rgba(16,185,129,0.18);  --tint-groen-tekst: #7EE2B8;
+    --tint-geel-bg: rgba(254,189,58,0.16);   --tint-geel-tekst: #F8CF72;
+    --tint-grijs-bg: #26324A;                --tint-grijs-tekst: #CBD5E1;
+    --tint-rood-bg: #3A1E26;                 --tint-rood-rand: #7F2A35;
+    color-scheme: dark;
+  }
+  /* Kleuren lopen zacht over als je wisselt (niet bij minder beweging: dan is de duur 0) */
+  :root.thema-wissel, :root.thema-wissel body, :root.thema-wissel body * {
+    transition: background-color var(--beweging-intrede) var(--ease-uit), border-color var(--beweging-intrede) var(--ease-uit),
+                color var(--beweging-intrede) var(--ease-uit) !important;
+  }
+
+  /* ===== Gedeelde animaties =====
+     Elementen zijn standaard zichtbaar; alleen het beginpunt van een animatie is doorzichtig.
+     Met duur 0ms springt een animatie direct naar het eindpunt, dus inhoud blijft nooit verborgen. */
+  @keyframes opkomen {
+    from { opacity: 0; transform: translate3d(0, var(--_afstand, var(--beweging-afstand)), 0); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes infaden { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes uitfaden { to { opacity: 0; visibility: hidden; } }
+  @keyframes draai { to { transform: rotate(360deg); } }
+  @keyframes vullen { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes schudden {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    15% { transform: translate3d(calc(var(--beweging-schud) * -1), 0, 0); }
+    30% { transform: translate3d(calc(var(--beweging-schud) * 0.8), 0, 0); }
+    45% { transform: translate3d(calc(var(--beweging-schud) * -0.6), 0, 0); }
+    60% { transform: translate3d(calc(var(--beweging-schud) * 0.4), 0, 0); }
+    75% { transform: translate3d(calc(var(--beweging-schud) * -0.2), 0, 0); }
+  }
+  @keyframes glans { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+
+  /* Binnenkomst. Volgorde met --i (0, 1, 2 ...); een pagina kan alles later laten starten met --start. */
+  .intrede {
+    animation: opkomen var(--beweging-intrede) var(--ease-uit)
+               calc(var(--start, 0ms) + var(--beweging-stap) * var(--i, 0)) both;
+  }
+  /* JavaScript zet deze klasse op een element om het één keer te laten trillen */
+  .schud { animation: schudden var(--beweging-schud-duur) var(--ease-in-uit) both; }
+
+  /* ===== Basis ===== */
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  /* Grote monitoren: alles schaalt een klein beetje mee (in %, dus de instelling van de gebruiker blijft gelden) */
+  @media (min-width: 1600px) and (min-height: 850px) { html { font-size: 106.25%; } } /* ± 17px */
+  @media (min-width: 2200px) and (min-height: 1100px) { html { font-size: 118.75%; } } /* ± 19px */
+  body {
+    margin: 0;
+    font-family: var(--font); font-size: var(--tekst-basis); line-height: 1.5;
+    color: var(--kleur-tekst); background: var(--kleur-achtergrond);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--font-mono); }
+  /* Het attribuut hidden wint altijd, ook van klassen als .knop (display: inline-flex) */
+  [hidden] { display: none !important; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ===== Knoppen ===== */
+  .knop {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--ruimte-2);
+    min-height: var(--hoogte-bediening); padding: var(--ruimte-2) var(--ruimte-5);
+    font-family: inherit; font-size: var(--tekst-basis); font-weight: 600; line-height: 1.2;
+    border: 0; border-radius: var(--radius); cursor: pointer; text-decoration: none;
+    transition:
+      background-color var(--beweging-snel) var(--ease-uit),
+      border-color var(--beweging-snel) var(--ease-uit),
+      color var(--beweging-snel) var(--ease-uit),
+      box-shadow var(--beweging-standaard) var(--ease-uit),
+      transform var(--beweging-snel) var(--ease-uit);
+  }
+  .knop:focus-visible { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 2px; }
+  .knop--primair {
+    background: var(--kleur-blauw); color: var(--kleur-knop-tekst);
+    box-shadow: 0 1px 2px rgba(21,35,58,0.08);
+  }
+  @media (hover: hover) {
+    .knop--primair:hover {
+      background: var(--kleur-blauw-donker); transform: translateY(var(--beweging-lift));
+      box-shadow: 0 6px 16px -6px rgba(31,111,194,0.5);
+    }
+  }
+  .knop--primair:active {
+    background: var(--kleur-blauw-donker); transform: scale(var(--beweging-druk));
+    box-shadow: inset 0 2px 0 rgba(11,26,48,0.2);
+  }
+  /* Secundair: wit met rand, voor minder belangrijke acties */
+  .knop--secundair {
+    background: var(--kleur-oppervlak); color: var(--kleur-tekst-zacht);
+    border: 1px solid var(--kleur-rand); font-size: var(--tekst-sm);
+  }
+  @media (hover: hover) {
+    .knop--secundair:hover { border-color: var(--kleur-rand-veld); color: var(--kleur-tekst); }
+  }
+  .knop--secundair:active { transform: scale(var(--beweging-druk)); }
+  .knop:disabled { background: #C9CDD8; color: #3E4658; cursor: not-allowed; box-shadow: none; transform: none; }
+  .knop--groot { min-height: var(--hoogte-bediening-groot); font-size: 1.0625rem; font-weight: 700; }
+  .knop--breed { width: 100%; }
+
+  /* Laadtoestand: tekst + spinner; geen lift meer */
+  .knop.laden,
+  .knop.laden:hover,
+  .knop.laden:active { background: var(--kleur-blauw-donker); cursor: progress; box-shadow: none; transform: none; }
+  .knop.laden .knop-tekst { animation: infaden var(--beweging-standaard) var(--ease-uit) both; }
+  .knop-spinner {
+    display: none; width: 1rem; height: 1rem; flex-shrink: 0; border-radius: 50%;
+    border: 2px solid rgba(11,26,48,0.25); border-top-color: var(--kleur-knop-tekst);
+    animation: draai var(--beweging-spinner) linear infinite;
+  }
+  .knop.laden .knop-spinner { display: inline-block; }
+  /* Modus "off": stilstaande ring; de knoptekst zegt al wat er gebeurt */
+  :root[data-motion="off"] .knop-spinner { border-color: var(--kleur-knop-tekst); border-right-color: transparent; }
+
+  /* ===== Skeleton (voor onderdelen die later via JavaScript laden) =====
+     Alleen gebruiken waar data echt asynchroon binnenkomt, NIET voor inhoud die Laravel al meestuurt.
+     Gebruik:
+       <section aria-busy="true" aria-describedby="...">
+         <span class="skelet skelet--tekst" style="width: 60%"></span>
+         <span class="skelet skelet--blok" style="height: 4.5rem"></span>
+       </section>
+     Zodra de data er is: skelet-elementen vervangen en aria-busy weghalen.
+     Glans staat stil in "reduced" en "off" (dan blijft het een rustig grijs vlak). */
+  .skelet {
+    display: block; border-radius: var(--radius-klein);
+    background: linear-gradient(90deg, var(--kleur-skelet) 0%, var(--kleur-skelet-glans) 50%, var(--kleur-skelet) 100%);
+    background-size: 200% 100%;
+    animation: glans 1.4s linear infinite;
+    animation-play-state: var(--beweging-sfeer);
+  }
+  .skelet--tekst { height: 0.875em; margin: 0.3em 0; }
+  .skelet--blok { height: 3rem; border-radius: var(--radius); }
+  .skelet--rond { border-radius: 50%; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Tokens, bewegingsmodi, .intrede, .knop en .sr-only komen uit portaal.partials.basis.
+     De paginaopbouw (navigatiebalk, kop, kaarten) is dezelfde als op het dashboard. */
+  :root {
+    --rail-breedte: 4.5rem;
+    --rail-breedte-open: 14rem;
+    --inhoud-max: 72rem;
+    --inhoud-x: clamp(1rem, 0.5rem + 2.5vw, 2.5rem);
+    --inhoud-y: clamp(1.25rem, 4vh, 2.5rem);
+    --kaart-padding: clamp(1rem, 0.75rem + 0.8vw, 1.5rem);
+    --raster-gat: clamp(0.75rem, 0.5rem + 0.6vw, 1rem);
+    --tekst-titel: clamp(1.375rem, 1.2rem + 0.6vw, 1.75rem);
+    --beweging-schuif: 340ms;   /* hoe lang het donkere blok naar de nieuwe keuze schuift */
+  }
+  /* Minder beweging of uit: het blok springt meteen naar de nieuwe plek */
+  :root[data-motion="reduced"], :root[data-motion="off"] { --beweging-schuif: 0ms; }
+  @media (prefers-reduced-motion: reduce) { :root { --beweging-schuif: 0ms; } }
+
+  a { color: #3F8CDD; text-decoration: none; }
+  a:hover { color: #2F74C0; }
+  p { margin: 0; }
+  .no-js .alleen-js { display: none !important; }
+
+  .sla-over {
+    position: absolute; left: var(--ruimte-3); top: var(--ruimte-3); z-index: 100;
+    padding: var(--ruimte-2) var(--ruimte-4); border-radius: var(--radius);
+    background: var(--kleur-oppervlak); color: var(--kleur-link); font-weight: 600;
+    transform: translateY(-200%);
+  }
+  .sla-over:focus { transform: none; outline: 3px solid var(--kleur-blauw-focus); outline-offset: 2px; }
+  .hoofdinhoud:focus { outline: none; }
+
+  /* ===== Paginaopbouw (zelfde als dashboard) ===== */
+  .pagina { display: flex; min-height: 100vh; min-height: 100dvh; width: 100%; }
+  .rail {
+    position: sticky; top: 0; align-self: flex-start;
+    width: var(--rail-breedte); height: 100vh; height: 100dvh; flex-shrink: 0;
+    background: var(--kleur-navy); display: flex; flex-direction: column; padding: 0.875rem 0;
+    overflow-x: hidden; overflow-y: auto;
+    transition: width var(--beweging-standaard) var(--ease-uit);
+  }
+  .rail.expanded { width: var(--rail-breedte-open); }
+  .rail-label { display: none; white-space: nowrap; }
+  .rail.expanded .rail-label { display: block; }
+  .navitem { text-decoration: none; }
+  .gebruikerlink:hover { background: #1B2E4B; }
+  .rail a:focus-visible,
+  .rail button:focus-visible { outline: 2px solid var(--kleur-focus-op-navy); outline-offset: 2px; border-radius: var(--radius); }
+
+  .hoofdinhoud {
+    flex: 1; min-width: 0;
+    padding: var(--inhoud-y) var(--inhoud-x) calc(var(--inhoud-y) + 0.5rem);
+  }
+  .hoofdinhoud-binnen {
+    width: 100%; max-width: var(--inhoud-max); margin: 0 auto;
+    container: lu-pagina / inline-size;
+  }
+
+  /* ===== Kop ===== */
+  .pagina-kop {
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap;
+    gap: var(--ruimte-4); margin-bottom: var(--ruimte-6);
+  }
+  .pagina-kop > div { min-width: 0; }
+  .pagina-datum { font-size: var(--tekst-sm); color: var(--kleur-tekst-subtiel); margin-bottom: var(--ruimte-1); }
+  .pagina-titel { margin: 0; font-size: var(--tekst-titel); line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+  .pagina-intro { margin-top: var(--ruimte-2); color: var(--kleur-tekst-zacht); max-width: 42rem; }
+  .header-uitlog svg { flex-shrink: 0; }
+  @media (hover: hover) {
+    .header-uitlog:hover { background: var(--tint-rood-bg); border-color: var(--tint-rood-rand); color: var(--kleur-fout); }
+  }
+
+  .kaart {
+    min-width: 0;
+    background: var(--kleur-oppervlak); border: 1px solid var(--kleur-rand);
+    border-radius: var(--radius-groot); box-shadow: var(--schaduw-vlak);
+    padding: var(--kaart-padding);
+  }
+  .hoofdinhoud a:focus-visible { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 2px; border-radius: 4px; }
+  .lijst { list-style: none; margin: 0; padding: 0; }
+
+  /* ===== Fase-route: drie stappen. Jouw fase heeft een gele markering, de gekozen fase is donker. ===== */
+  .route { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--raster-gat); margin-bottom: var(--raster-gat); }
+  /* Drie naast elkaar pas als er ruimte genoeg is voor de grote cirkel en de hele fasenaam */
+  @container lu-pagina (min-width: 56rem) { .route { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .stap {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--ruimte-4); min-width: 0;
+    color: var(--kleur-tekst);
+    transition: border-color var(--beweging-snel) var(--ease-uit), transform var(--beweging-snel) var(--ease-uit);
+  }
+  @media (hover: hover) {
+    .stap:hover { color: var(--kleur-tekst); border-color: var(--kleur-rand-veld-hover); transform: translateY(var(--beweging-lift)); }
+  }
+  .stap[aria-current="page"] { background: var(--kleur-actief-vlak); border-color: var(--kleur-actief-vlak); color: var(--kleur-op-navy); }
+  .stap[aria-current="page"]:hover { color: var(--kleur-op-navy); }
+  /* flex-wrap: past de statuslabel er niet meer naast, dan gaat hij naar de volgende regel (de fasenaam breekt niet midden in een woord) */
+  .stap-links { display: flex; flex-direction: column; gap: var(--ruimte-3); min-width: 0; }
+  /* Cirkel met de voortgang van de fase; de kleur komt uit Portaal::voortgangKleur (zelfde als de balken). Het spoor volgt de tekstkleur. */
+  .stap-ring { position: relative; width: 5.5rem; height: 5.5rem; flex: none; }
+  .stap-ring svg { width: 100%; height: 100%; display: block; transform: rotate(-90deg); }
+  .stap-ring circle { fill: none; stroke-width: 10; }
+  .stap-ring .spoor { stroke: currentColor; opacity: 0.16; }
+  .stap-ring .vul { stroke-linecap: round; animation: ringvullen var(--beweging-vulling) var(--ease-uit) both; }
+  @keyframes ringvullen { from { stroke-dasharray: 0 100; } }
+  .stap-ring b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--tekst-label); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stap-kop { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ruimte-2) var(--ruimte-3); min-width: 0; }
+  .stap-nr {
+    width: 2rem; height: 2rem; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: var(--tekst-sm); font-weight: 600;
+    background: var(--kleur-lila); color: var(--kleur-tekst-zacht);
+  }
+  .stap[aria-current="page"] .stap-nr { background: var(--kleur-blauw-donker); color: #FFFFFF; }
+  .stap-naam { font-size: 1.0625rem; font-weight: 700; min-width: 0; overflow-wrap: break-word; }
+  .stap-status {
+    flex-shrink: 0; white-space: nowrap;
+    font-size: var(--tekst-xs); font-weight: 700; border-radius: 999px; padding: 2px var(--ruimte-2);
+  }
+  .status-nu     { background: var(--kleur-geel); color: var(--kleur-navy); }
+  .status-achter { background: var(--tint-groen-bg); color: var(--tint-groen-tekst); }
+  .status-straks { background: var(--kleur-lila); color: var(--kleur-tekst-zacht); }
+  .stap[aria-current="page"] .status-straks { background: var(--kleur-navy-licht); color: var(--kleur-op-navy-zacht); }
+  .stap-cijfers { display: flex; flex-direction: column; gap: var(--ruimte-2); min-width: 9rem; font-size: var(--tekst-klein); color: var(--kleur-tekst-subtiel); }
+  .stap[aria-current="page"] .stap-cijfers { color: var(--kleur-op-navy-zacht); }
+  .stap-soort { display: flex; flex-direction: column; gap: 4px; }
+  .stap-balk { display: block; height: 6px; border-radius: 4px; background: var(--kleur-balk-leeg); overflow: hidden; }
+  .stap[aria-current="page"] .stap-balk { background: rgba(255,255,255,0.18); }
+  .stap-vulling { display: block; height: 100%; border-radius: 4px; transform-origin: left center; animation: vullen var(--beweging-vulling) var(--ease-uit) both; }
+  .stap-gem { margin-left: var(--ruimte-1); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--kleur-op-navy); }
+  .stap-cijfers b { font-family: var(--font-mono); font-weight: 600; color: var(--kleur-tekst); margin-right: 2px; }
+  .stap[aria-current="page"] .stap-cijfers b { color: var(--kleur-op-navy); }
+
+  /* ===== Filter: Alle / Hardskills / Softskills als één segmentknop ===== */
+  .filterbalk {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: var(--ruimte-3); margin: var(--ruimte-6) 0 var(--raster-gat);
+  }
+  .segment {
+    display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px;
+    background: var(--kleur-oppervlak); border: 1px solid var(--kleur-rand);
+  }
+  .segment a {
+    display: inline-flex; align-items: center; min-height: 2.25rem; padding: 0 var(--ruimte-4);
+    border-radius: 7px; font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-tekst-zacht);
+    transition: background-color var(--beweging-snel) var(--ease-uit), color var(--beweging-snel) var(--ease-uit);
+  }
+  .segment a:hover { color: var(--kleur-tekst); background: var(--kleur-oppervlak-zacht); }
+  .segment a[aria-current="true"] { background: var(--kleur-actief-vlak); color: #FFFFFF; }
+  .filter-uitleg { font-size: var(--tekst-sm); color: var(--kleur-tekst-subtiel); }
+
+  /* ===== Schuivend donker blok (alleen met JavaScript: dan staat .met-schuif op de route en het segment) =====
+     Eén los blok ligt achter de knoppen en schuift met transform naar de actieve knop.
+     transform en width/height zijn goedkoop om te animeren en de knoppen zelf bewegen niet. */
+  .route, .segment { position: relative; }
+  .schuif {
+    position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none;
+    background: var(--kleur-actief-vlak);
+    transition:
+      transform var(--beweging-schuif) var(--ease-uit),
+      width var(--beweging-schuif) var(--ease-uit),
+      height var(--beweging-schuif) var(--ease-uit);
+  }
+  .schuif.zonder-overgang { transition: none; }
+  .route .schuif { border-radius: var(--radius-groot); box-shadow: 0 8px 20px -10px rgba(21,35,58,0.45); }
+  .segment .schuif { border-radius: 7px; }
+
+  /* Lagen binnen de route: witte kaart (gewone laag) < donker blok (z-index 1) < tekst (z-index 2).
+     Daarom mag een .stap zelf geen transform of animatie hebben. */
+  .met-schuif .stap > *, .met-schuif.segment a { position: relative; z-index: 2; }
+  .met-schuif .stap,
+  .met-schuif .stap .stap-naam, .met-schuif .stap .stap-cijfers, .met-schuif .stap .stap-cijfers b,
+  .met-schuif .stap .stap-nr, .met-schuif .stap .stap-status, .met-schuif .stap .stap-ring, .met-schuif.segment a {
+    transition: color var(--beweging-schuif) var(--ease-uit), background-color var(--beweging-schuif) var(--ease-uit),
+                border-color var(--beweging-snel) var(--ease-uit);
+  }
+  /* De kaart zelf blijft wit: het donkere blok eroverheen maakt hem donker */
+  .met-schuif .stap[aria-current="page"] { background: var(--kleur-oppervlak); border-color: var(--kleur-rand); }
+  .met-schuif .stap:hover { transform: none; }
+  .met-schuif.segment a[aria-current="true"] { background: transparent; }
+
+  /* Inhoud schuift mee in dezelfde richting (verschuiving is 0 bij minder beweging) */
+  @keyframes binnen-van-rechts { from { opacity: 0; transform: translate3d(calc(var(--beweging-afstand) * 3), 0, 0); } to { opacity: 1; transform: none; } }
+  @keyframes binnen-van-links  { from { opacity: 0; transform: translate3d(calc(var(--beweging-afstand) * -3), 0, 0); } to { opacity: 1; transform: none; } }
+
+  /* ===== Leeruitkomsten: twee kolommen (hard / soft) als er ruimte is ===== */
+  .lu-raster { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--raster-gat); align-items: start; }
+  @container lu-pagina (min-width: 56rem) {
+    .lu-panelen[data-soort=""] .lu-raster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  /* Het soortfilter: data-soort op de wrapper bepaalt welke groep zichtbaar is (JavaScript past alleen dit aan) */
+  .lu-panelen[data-soort="hard"] .softskill,
+  .lu-panelen[data-soort="soft"] .hardskill { display: none; }
+  /* Kort infaden bij wisselen (staat uit bij "minder beweging") */
+  .lu-panelen.wissel .lu-paneel:not([hidden]) { animation: infaden var(--beweging-schuif) var(--ease-uit) both; }
+  .lu-panelen.wissel[data-richting="rechts"] .lu-paneel:not([hidden]) { animation-name: binnen-van-rechts; }
+  .lu-panelen.wissel[data-richting="links"] .lu-paneel:not([hidden]) { animation-name: binnen-van-links; }
+  .groep-kop { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ruimte-1) var(--ruimte-3); margin-bottom: var(--ruimte-2); }
+  .groep-titel { margin: 0; font-size: 1.0625rem; line-height: 1.3; font-weight: 700; }
+  .groep-sub { font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-tekst-subtiel); }
+  .groep-stip { width: 0.625rem; height: 0.625rem; border-radius: 50%; flex-shrink: 0; }
+  .groep-stip.hardskill { background: var(--kleur-blauw-donker); }
+  .groep-stip.softskill { background: #8B5CF6; }
+
+  /* ===== Eén leeruitkomst = een uitklapper (<details>): dicht = term + voortgang, open = officiële uitleg ===== */
+  .lu { border-top: 1px solid var(--kleur-lijn); }
+  .lu:first-child { border-top: 0; }
+  .lu summary {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--ruimte-2) var(--ruimte-3);
+    padding: var(--ruimte-3) var(--ruimte-2); margin: 0 calc(var(--ruimte-2) * -1); border-radius: var(--radius);
+    cursor: pointer; list-style: none;
+  }
+  .lu summary::-webkit-details-marker { display: none; }
+  .lu summary:hover { background: var(--kleur-oppervlak-zacht); }
+  .lu summary:focus-visible { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 0; }
+  .lu-nr {
+    flex-shrink: 0; width: 2.25rem; height: 2.25rem; border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: var(--tekst-sm); font-weight: 600;
+  }
+  .hardskill .lu-nr { background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst); }
+  .softskill .lu-nr { background: var(--tint-paars-bg); color: var(--tint-paars-tekst); }
+  .lu-kop { flex: 1 1 10rem; min-width: 0; }
+  .lu-term { display: block; font-size: var(--tekst-label); font-weight: 700; line-height: 1.3; }
+  .lu-label { display: block; font-size: var(--tekst-xs); color: var(--kleur-tekst-subtiel); margin-top: 1px; overflow-wrap: anywhere; }
+  .lu-labeltekst { font-family: var(--font-mono); }
+  .lu-meter { display: flex; align-items: center; gap: var(--ruimte-2); flex: 0 1 9rem; min-width: 7rem; }
+  .lu-balk { flex: 1; height: 6px; border-radius: 4px; background: var(--kleur-balk-leeg); overflow: hidden; }
+  .lu-vulling { display: block; height: 100%; border-radius: 4px; transform-origin: left center; animation: vullen var(--beweging-vulling) var(--ease-uit) both; }
+  /* De kleur van de balk volgt de voortgang (inline style, uit Portaal::voortgangKleur) */
+  .legenda { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ruimte-1) var(--ruimte-3); margin: 0 0 var(--raster-gat); padding: 0; list-style: none; font-size: var(--tekst-sm); color: var(--kleur-tekst-subtiel); }
+  .legenda li { display: inline-flex; align-items: center; gap: 0.375rem; }
+  .legenda i { width: 0.75rem; height: 0.375rem; border-radius: 3px; display: inline-block; }
+  .lu-pct { width: 2.6rem; text-align: right; font-size: var(--tekst-sm); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .lu-pijl { flex-shrink: 0; color: var(--kleur-icoon); transition: transform var(--beweging-standaard) var(--ease-uit); }
+  .lu[open] .lu-pijl { transform: rotate(180deg); }
+  .lu-uitleg { padding: 0 var(--ruimte-2) var(--ruimte-4) 3rem; }
+  .lu[open] .lu-uitleg { animation: opkomen var(--beweging-standaard) var(--ease-uit) both; --_afstand: calc(var(--beweging-afstand-klein) * -1); }
+  .lu-tekst { font-size: var(--tekst-label); line-height: 1.55; color: var(--kleur-tekst-zacht); overflow-wrap: break-word; }
+  .lu-doelchip { display: inline-block; margin-left: var(--ruimte-2); padding: 0 var(--ruimte-2); border-radius: 999px; font-size: var(--tekst-xs); font-weight: 700; background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst); }
+  .lu-doelen { margin-top: var(--ruimte-3); padding: var(--ruimte-3); border-radius: var(--radius); background: var(--kleur-oppervlak-zacht); border: 1px solid var(--kleur-lijn); }
+  .lu-doelen-kop { margin: 0 0 var(--ruimte-2); font-size: var(--tekst-sm); font-weight: 700; }
+  .lu-doelen ul { list-style: none; margin: 0 0 var(--ruimte-2); padding: 0; display: grid; gap: var(--ruimte-2); }
+  .lu-doelkolom { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+  .lu-doelmeter { display: flex; align-items: center; gap: var(--ruimte-2); }
+  .lu-balk--smal { flex: 0 1 8rem; height: 5px; }
+  :root[data-thema="donker"] .lu-doelstand { color: var(--stand-balk); }
+  .lu-doelstand { font-size: var(--tekst-xs); font-weight: 700; color: var(--stand-tekst); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .lu-doelen li { display: flex; align-items: baseline; gap: var(--ruimte-2); font-size: var(--tekst-sm); line-height: 1.45; }
+  .lu-doeltekst { min-width: 0; overflow-wrap: anywhere; }
+  .lu-doelstatus { flex: none; padding: 0 var(--ruimte-2); border-radius: 999px; font-size: var(--tekst-xs); font-weight: 700; background: var(--tint-grijs-bg); color: var(--tint-grijs-tekst); }
+  .lu-doelstatus.s-bezig { background: var(--tint-geel-bg); color: var(--tint-geel-tekst); }
+  .lu-doelstatus.s-behaald { background: var(--tint-groen-bg); color: var(--tint-groen-tekst); }
+  .lu-actie { display: inline-flex; align-items: center; gap: var(--ruimte-1); font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-link); }
+  .lu-actie:hover { color: var(--kleur-link-hover); text-decoration: underline; text-underline-offset: 3px; }
+
+
+  /* Rechts in de filterbalk: alles open/dicht */
+  .filter-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ruimte-3); }
+  .knop--klein svg { flex: none; }
+  /* Leerdoel maken: rustige knop in dezelfde donkere kleur als het gekozen filter; bij hover alleen iets lichter */
+  .knop-leerdoel { background: var(--kleur-actief-vlak); color: #FFFFFF; }
+  @media (hover: hover) { .knop-leerdoel:hover { filter: brightness(1.25); } }
+  .knop-leerdoel:active { filter: brightness(1.15); }
+  dialog.leerdoel {
+    width: min(32rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow-y: auto; padding: var(--ruimte-6); border: 1px solid var(--kleur-rand);
+    border-radius: var(--radius-groot); background: var(--kleur-oppervlak); color: var(--kleur-tekst);
+    box-shadow: 0 20px 50px -12px rgba(0,0,0,0.35);
+  }
+  dialog.leerdoel::backdrop { background: rgba(11,17,29,0.5); }
+  dialog.leerdoel[open] { animation: opkomen var(--beweging-intrede) var(--ease-uit) both; }
+  .leerdoel h2 { margin: 0 0 var(--ruimte-1); font-size: 1.125rem; }
+  .leerdoel .dlg-uitleg { margin: 0 0 var(--ruimte-4); color: var(--kleur-tekst-zacht); font-size: var(--tekst-sm); line-height: 1.5; }
+  .dlg-veld { display: block; margin: 0 0 var(--ruimte-4); padding: 0; border: 0; min-width: 0; }
+  .dlg-veld > span, .dlg-veld > legend { display: block; margin-bottom: var(--ruimte-2); padding: 0; font-size: var(--tekst-sm); font-weight: 600; }
+  .dlg-veld small { font-weight: 500; color: var(--kleur-tekst-subtiel); }
+  .dlg-invoer {
+    display: block; width: 100%; padding: var(--ruimte-2) var(--ruimte-3); font-family: inherit; font-size: var(--tekst-veld);
+    line-height: 1.5; color: var(--kleur-tekst); background: var(--kleur-oppervlak);
+    border: 1px solid var(--kleur-rand-veld); border-radius: var(--radius);
+  }
+  textarea.dlg-invoer { min-height: 6rem; resize: none; }
+  .dlg-invoer:focus { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 1px; border-color: var(--kleur-blauw-focus); }
+  .dlg-invoer[aria-invalid="true"] { border-color: var(--kleur-fout); box-shadow: inset 0 0 0 1px var(--kleur-fout); }
+  .dlg-fout { display: flex; align-items: center; gap: var(--ruimte-2); margin: var(--ruimte-2) 0 0; font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-fout); }
+  .dlg-fout[hidden] { display: none; }
+  .dlg-fout.schud { animation: ldSchud .3s ease; }
+  @keyframes ldSchud { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  @media (prefers-reduced-motion: reduce) { .dlg-fout.schud { animation: none; } }
+  /* Fase kiezen: drie keuzeknoppen in plaats van een uitklaplijst */
+  .keuzes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ruimte-2); }
+  @media (max-width: 34rem) { .keuzes { grid-template-columns: minmax(0, 1fr); } }
+  .keuze { position: relative; }
+  .keuze input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .keuze span {
+    display: flex; align-items: center; justify-content: center; text-align: center; min-height: 2.5rem; padding: var(--ruimte-1) var(--ruimte-2); border-radius: 8px;
+    border: 1px solid var(--kleur-rand-veld); font-size: var(--tekst-sm); font-weight: 600; color: var(--kleur-tekst-zacht);
+    background: var(--kleur-oppervlak); transition: background-color var(--beweging-snel) var(--ease-uit), color var(--beweging-snel) var(--ease-uit);
+  }
+  .keuze input:hover + span { background: var(--kleur-oppervlak-zacht); }
+  .keuze input:checked + span { background: var(--kleur-actief-vlak); border-color: var(--kleur-actief-vlak); color: #FFFFFF; }
+  .keuze input:focus-visible + span { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 1px; }
+  /* Skill kiezen: een lijst met vaste hoogte die zelf scrolt (niet het hele scherm) */
+  /* ===== Skills kiezen: rijen met een eigen vinkje, groepskoppen die blijven staan en chips van je keuze ===== */
+  .skilllijst { max-height: 13rem; overflow-y: auto; padding: 0 6px 6px; border: 1px solid var(--kleur-rand-veld); border-radius: var(--radius); background: var(--kleur-oppervlak); overscroll-behavior: contain; }
+  .skilllijst-kop {
+    position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: var(--ruimte-2);
+    margin: 0 -6px 2px; padding: 10px 14px 6px; background: var(--kleur-oppervlak);
+    font-size: var(--tekst-xs); font-weight: 700; color: var(--kleur-tekst-subtiel);
+  }
+  .skilllijst-kop::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--kleur-blauw-donker); }
+  .skilllijst-kop.soft::before { background: #8B5CF6; }
+  .skill-optie {
+    position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px;
+    font-size: var(--tekst-sm); cursor: pointer; transition: background-color var(--beweging-snel) var(--ease-uit);
+  }
+  .skill-optie:hover { background: var(--kleur-oppervlak-zacht); }
+  .skill-optie input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .vink {
+    flex: none; display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border-radius: 6px; color: #FFFFFF;
+    border: 1.5px solid var(--kleur-rand-veld); background: var(--kleur-oppervlak);
+    transition: background-color var(--beweging-snel) var(--ease-uit), border-color var(--beweging-snel) var(--ease-uit);
+  }
+  .vink svg { opacity: 0; transform: scale(0.5); transition: opacity var(--beweging-snel) var(--ease-uit), transform var(--beweging-snel) var(--ease-uit); }
+  .skill-optie input:checked + .vink { background: var(--kleur-actief-vlak); border-color: var(--kleur-actief-vlak); }
+  .skill-optie input:checked + .vink svg { opacity: 1; transform: none; }
+  .skill-optie input:focus-visible + .vink { outline: 3px solid var(--kleur-blauw-focus); outline-offset: 2px; }
+  .skill-optie:has(input:checked) { background: var(--kleur-oppervlak-zacht); box-shadow: inset 0 0 0 1px var(--kleur-rand); }
+  .skill-nr {
+    flex: none; display: inline-grid; place-items: center; min-width: 1.5rem; height: 1.5rem; padding: 0 4px; border-radius: 6px;
+    font-size: var(--tekst-xs); font-weight: 700; background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst);
+  }
+  .skill-optie[data-soort="softskill"] .skill-nr { background: var(--tint-paars-bg); color: var(--tint-paars-tekst); }
+  .skill-naam { min-width: 0; overflow-wrap: anywhere; }
+  .skill-optie:has(input:checked) .skill-naam { font-weight: 600; }
+
+  .skill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--ruimte-3); }
+  .skill-chips:empty { display: none; }
+  .skill-chip {
+    display: inline-flex; align-items: center; gap: 2px; padding: 2px 3px 2px 10px; border-radius: 999px;
+    font-size: var(--tekst-xs); font-weight: 700; background: var(--tint-blauw-bg); color: var(--tint-blauw-tekst);
+    animation: opkomen var(--beweging-snel) var(--ease-uit) both;
+  }
+  .skill-chip[data-soort="softskill"] { background: var(--tint-paars-bg); color: var(--tint-paars-tekst); }
+  .skill-chip button { display: grid; place-items: center; width: 1.25rem; height: 1.25rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+  .skill-chip button:hover { background: rgba(127,127,127,0.25); }
+  .skill-chip button:focus-visible { outline: 2px solid var(--kleur-blauw-focus); outline-offset: 1px; }
+  .dlg-knoppen { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ruimte-2); margin-top: var(--ruimte-2); }
+  .filter-rechts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ruimte-2) var(--ruimte-4); }
+  .knop--klein { min-height: 2.25rem; padding: var(--ruimte-1) var(--ruimte-3); font-size: var(--tekst-sm); }
+
+  .leeg { text-align: center; padding: var(--ruimte-8) var(--ruimte-4); color: var(--kleur-tekst-subtiel); }
+
+  /* ===== Telefoon: navigatie onderaan (zelfde als dashboard) ===== */
+  @media (max-width: 720px) {
+    .pagina { display: block; }
+    .rail, .rail.expanded {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100% !important;
+      height: calc(3.75rem + env(safe-area-inset-bottom, 0px));
+      flex-direction: row; align-items: center; padding: 0 6px env(safe-area-inset-bottom, 0px); z-index: 60;
+      border-top: 1px solid #22385A; transition: none; overflow: visible;
+    }
+    .rail > div:first-child, .rail > button { display: none !important; }
+    .rail > div:nth-of-type(2) { flex: 1; flex-direction: row !important; justify-content: space-around; padding: 0 !important; gap: 0 !important; }
+    .rail > div:nth-of-type(2) .navitem { padding: 12px 13px !important; box-shadow: none !important; }
+    .rail > div:nth-of-type(2) .navitem[style*="background: #213A5E"],
+    .rail > div:nth-of-type(2) .navitem[aria-current="page"] { box-shadow: inset 0 -3px 0 #FEBD3A !important; border-radius: 8px 8px 0 0 !important; }
+    .rail > div:nth-of-type(3) { margin-top: 0 !important; padding: 0 4px !important; }
+    .rail-label, .rail.expanded .rail-label { display: none !important; }
+    .hoofdinhoud { padding: var(--ruimte-4) var(--ruimte-4) calc(5.25rem + env(safe-area-inset-bottom, 0px)); }
+  }
+</style>
+</head>
+<body>
+<div id="demo-balk" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#FEF3C7;color:#92400E;font:600 13px/1.4 system-ui,sans-serif;padding:6px 12px;text-align:center">Demo: dit is een vaste weergave van de student-omgeving. Wijzigingen worden niet opgeslagen.</div>
+<script>
+document.addEventListener('submit',function(e){e.preventDefault();var b=document.getElementById('demo-balk');if(b){b.style.background='#FBC6CA';b.textContent='Dit is een demo: hier kan niets worden opgeslagen.';setTimeout(function(){b.style.background='#FEF3C7';b.textContent='Demo: dit is een vaste weergave van de student-omgeving. Wijzigingen worden niet opgeslagen.'},2500)}},true);
+</script>
+<style>body{padding-top:30px}</style>
+
+
+<a href="#inhoud" class="sla-over">Naar de inhoud</a>
+
+<div class="pagina">
+
+  <!-- ===== Navigatierail (inklapbaar) ===== -->
+  <div class="rail" id="navRail">
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 14px; margin-bottom: 20px; min-width: 0">
+      <svg width="30" height="30" viewBox="0 0 104 104" style="flex-shrink:0;display:block" aria-hidden="true"><rect x="4" y="4" width="96" height="96" rx="18" fill="#3F8CDD" stroke="#1C2340" stroke-width="4"/><rect x="20" y="58" width="16" height="26" rx="3" fill="#F1EBF7" stroke="#1C2340" stroke-width="3.5"/><rect x="42" y="44" width="16" height="40" rx="3" fill="#FEBD3A" stroke="#1C2340" stroke-width="3.5"/><rect x="64" y="28" width="16" height="56" rx="3" fill="#F66169" stroke="#1C2340" stroke-width="3.5"/></svg>
+      <div class="rail-label" style="font-weight: 700; color: #FFFFFF; font-size: 13px; overflow: hidden">ITIG Portal</div>
+    </div>
+
+    <button id="navToggle" aria-label="Menu in- of uitklappen" style="margin: 0 14px 18px; width: 28px; height: 28px; border-radius: 7px; border: 1px solid #2B4A75; background: transparent; color: #86A9D6; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+    </button>
+
+    <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 10px">
+                                  <a href="index.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Dashboard</span>
+          </a>
+                                          <a href="leeruitkomsten.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; background: #213A5E; box-shadow: inset 3px 0 0 #FEBD3A;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z"></path><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"></path></svg>
+            <span class="rail-label" style="color: #FFFFFF; font-size: 12.5px; font-weight: 600">Leeruitkomsten</span>
+          </a>
+                                          <a href="leerdoelen.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Leerdoelen</span>
+          </a>
+                                          <a href="begeleiding.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Student-docentrelatie</span>
+          </a>
+                                          <a href="feedback.html" class="navitem" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; min-width: 0; ">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#86A9D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span class="rail-label" style="color: #B5C8E3; font-size: 12.5px; font-weight: 600">Feedback</span>
+          </a>
+                  </div>
+
+    <!-- Profiel: wie er ingelogd is. Uitloggen zelf staat nu ook bovenaan de pagina. -->
+    <div style="margin-top: auto; padding: 0 10px">
+            <a  href="profiel.html" title="Mijn profiel"  class="navitem gebruikerlink" style="display: flex; align-items: center; gap: 9px; padding: 6px 4px; min-width: 0; border-radius: 8px; ">
+                  <div style="width: 28px; height: 28px; border-radius: 50%; background: #60ACE1; display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: #0E2240; font-size: 10.5px; flex-shrink: 0">JM</div>
+                <div class="rail-label" style="overflow: hidden">
+          <div style="color: #FFFFFF; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Jair Modiwirijo</div>
+          <div style="color: #7F9AC0; font-size: 10.5px; white-space: nowrap">Student</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+
+  <main class="hoofdinhoud" id="inhoud" tabindex="-1">
+  <div class="hoofdinhoud-binnen">
+
+    <header class="pagina-kop intrede" style="--i:0">
+      <div>
+        <p class="pagina-datum">30 okt 2026 — Periode 1, 2026/2027</p>
+        <h1 class="pagina-titel">Leeruitkomsten</h1>
+        <p class="pagina-intro">Wat je aan het eind van elke ontwikkelfase moet kunnen, in hardskills en softskills.</p>
+      </div>
+      <form method="POST" action="#" style="margin: 0">
+<input type="hidden" name="_token" value="" autocomplete="off">        <button type="submit" class="knop knop--secundair header-uitlog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Uitloggen
+        </button>
+      </form>
+    </header>
+
+    
+    
+    <nav class="route intrede" style="--i:1" aria-label="Ontwikkelfases">
+              <a class="kaart stap" data-fase="10"
+           href="leeruitkomsten.html"
+           >
+          <span class="stap-links">
+          <span class="stap-kop">
+            <span class="stap-nr" aria-hidden="true">1</span>
+            <span class="stap-naam">Oriëntatiefase</span>
+                          <span class="stap-status status-achter">Afgerond</span>
+                      </span>
+          <span class="stap-cijfers">
+            <span class="stap-soort"><span class="stap-soort-tekst"><b>8</b> hardskills </span>
+                          </span>
+            <span class="stap-soort"><span class="stap-soort-tekst"><b>8</b> softskills </span>
+                          </span>
+          </span>
+          </span>
+                      <span class="stap-ring" role="img" aria-label="Voortgang Oriëntatiefase: 91 procent">
+              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <circle class="spoor" cx="50" cy="50" r="42"/>
+                <circle class="vul" cx="50" cy="50" r="42" pathLength="100" stroke-dasharray="91 100" style="stroke: #15A363"/>              </svg>
+              <b aria-hidden="true">91%</b>
+            </span>
+                  </a>
+              <a class="kaart stap" data-fase="11"
+           href="leeruitkomsten.html"
+            aria-current="page" >
+          <span class="stap-links">
+          <span class="stap-kop">
+            <span class="stap-nr" aria-hidden="true">2</span>
+            <span class="stap-naam">Verdiepingsfase</span>
+                          <span class="stap-status status-nu">Jouw fase</span>
+                      </span>
+          <span class="stap-cijfers">
+            <span class="stap-soort"><span class="stap-soort-tekst"><b>8</b> hardskills  <span class="stap-gem"><span class="sr-only">, gemiddeld </span>10%</span></span>
+                              <span class="stap-balk" role="progressbar" aria-label="Gemiddelde voortgang hardskills" aria-valuemin="0" aria-valuemax="100" aria-valuenow="10"><span class="stap-vulling" style="width: 10%; background: #D0414B"></span></span>
+                          </span>
+            <span class="stap-soort"><span class="stap-soort-tekst"><b>8</b> softskills  <span class="stap-gem"><span class="sr-only">, gemiddeld </span>15%</span></span>
+                              <span class="stap-balk" role="progressbar" aria-label="Gemiddelde voortgang softskills" aria-valuemin="0" aria-valuemax="100" aria-valuenow="15"><span class="stap-vulling" style="width: 15%; background: #D0414B"></span></span>
+                          </span>
+          </span>
+          </span>
+                      <span class="stap-ring" role="img" aria-label="Voortgang Verdiepingsfase: 13 procent">
+              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <circle class="spoor" cx="50" cy="50" r="42"/>
+                <circle class="vul" cx="50" cy="50" r="42" pathLength="100" stroke-dasharray="13 100" style="stroke: #D0414B"/>              </svg>
+              <b aria-hidden="true">13%</b>
+            </span>
+                  </a>
+              <a class="kaart stap" data-fase="12"
+           href="leeruitkomsten.html"
+           >
+          <span class="stap-links">
+          <span class="stap-kop">
+            <span class="stap-nr" aria-hidden="true">3</span>
+            <span class="stap-naam">Afrondingsfase</span>
+                          <span class="stap-status status-straks">Nog te gaan</span>
+                      </span>
+          <span class="stap-cijfers">
+            <span class="stap-soort"><span class="stap-soort-tekst"><b>8</b> hardskills </span>
+                          </span>
+            <span class="stap-soort"><span class="stap-soort-tekst"><b>8</b> softskills </span>
+                          </span>
+          </span>
+          </span>
+                      <span class="stap-ring" role="img" aria-label="Voortgang Afrondingsfase: 0 procent">
+              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <circle class="spoor" cx="50" cy="50" r="42"/>
+                              </svg>
+              <b aria-hidden="true">0%</b>
+            </span>
+                  </a>
+          </nav>
+
+    
+    <div class="filterbalk intrede" style="--i:4">
+      <div class="filter-links">
+      <nav class="segment" aria-label="Soort leeruitkomst">
+        <a href="leeruitkomsten.html" data-soort=""  aria-current="true" >Alle</a>
+                  <a href="leeruitkomsten.html" data-soort="hard" >Hardskills</a>
+                  <a href="leeruitkomsten.html" data-soort="soft" >Softskills</a>
+              </nav>
+      <a class="knop knop--klein knop-leerdoel" id="leerdoelKnop" href="leerdoelen.html#nieuw">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Leerdoel maken
+      </a>
+      </div>
+      <div class="filter-rechts">
+        <button type="button" class="knop knop--secundair knop--klein alleen-js" id="allesOpen" aria-pressed="false">Alles openklappen</button>
+      </div>
+    </div>
+    <ul class="legenda" aria-label="Kleuren van de voortgang">
+      <li><i style="background: #D0414B" aria-hidden="true"></i>0 – 20%</li><li><i style="background: #F08A24" aria-hidden="true"></i>21 – 40%</li><li><i style="background: #EAB308" aria-hidden="true"></i>41 – 60%</li><li><i style="background: #84CC16" aria-hidden="true"></i>61 – 80%</li><li><i style="background: #15A363" aria-hidden="true"></i>81 – 100%</li>    </ul>
+    <p class="filter-uitleg" id="tipLeerdoel" style="margin: calc(var(--raster-gat) * -0.5) 0 var(--raster-gat)">Klik op een skill voor de uitleg. Een leerdoel maak je met de knop "Leerdoel maken".</p>
+
+    
+    <div class="lu-panelen" id="luPanelen" data-soort="">
+              <div class="lu-paneel" data-fase="10" data-eigen="0"
+             data-naam="Oriëntatiefase"  hidden >
+                      <div class="lu-raster">
+                              <section class="kaart hardskill intrede" style="--i:5" aria-labelledby="kop-10-hardskill">
+                  <div class="groep-kop">
+                    <span class="groep-stip hardskill" aria-hidden="true"></span>
+                    <h2 class="groep-titel" id="kop-10-hardskill">Hardskills</h2>
+                    <span class="groep-sub">· Oriëntatiefase · 8</span>
+                  </div>
+                  <ol class="lijst">
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">1</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Taken uitvoeren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Hardskills_001</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Taken uitvoeren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="90">
+                                  <span class="lu-vulling" style="width: 90%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">90%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase kan ik eenvoudige taken uitvoeren binnen mijn vakgebied, zoals het installeren, plannen of configureren van systemen, software of processen. Dit doe ik onder begeleiding van mijn docent of begeleider.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">2</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Problemen signaleren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Hardskills_002</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Problemen signaleren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="95">
+                                  <span class="lu-vulling" style="width: 95%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">95%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase kan ik afwijkingen en problemen signaleren en deze zelfstandig of in overleg met mijn begeleider of team bespreken. Ik heb, met ondersteuning, geleerd hoe ik hierover kan rapporteren.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">3</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Technisch ontwerpen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Hardskills_003</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Technisch ontwerpen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="95">
+                                  <span class="lu-vulling" style="width: 95%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">95%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase heb ik kennis gekregen van basisprincipes voor technische ontwerpen of configuraties en kan ik onder begeleiding meewerken aan eenvoudige oplossingen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">4</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Samenwerken en communiceren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Hardskills_004</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Samenwerken en communiceren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="85">
+                                  <span class="lu-vulling" style="width: 85%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">85%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase heb ik geleerd samen te werken in een team en duidelijk en effectief te communiceren, met ondersteuning van mijn begeleider waar nodig.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">5</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Voortgang rapporteren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Hardskills_005</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Voortgang rapporteren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="90">
+                                  <span class="lu-vulling" style="width: 90%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">90%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase kan ik de voortgang van mijn werk of taken bijhouden en hierover gestructureerd rapporteren in overleg met mijn begeleider.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">6</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Kwaliteit met tools</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Hardskills_006</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Kwaliteit met tools"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="95">
+                                  <span class="lu-vulling" style="width: 95%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">95%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase kan ik tools en technieken gebruiken om de kwaliteit van mijn werk te verbeteren. Ik kan mijn keuzes en resultaten bespreken met mijn begeleider.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">7</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Veilig werken</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Hardskills_007</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Veilig werken"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="90">
+                                  <span class="lu-vulling" style="width: 90%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">90%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase heb ik geleerd veilige werkprocedures volgen en er onder begeleiding voor zorgen dat mijn werk voldoet aan de geldende normen en regels.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">8</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Keuzes onderbouwen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Hardskills_008</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Keuzes onderbouwen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="95">
+                                  <span class="lu-vulling" style="width: 95%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">95%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase kan ik mijn keuzes en acties in mijn werk toelichten en deze onder begeleiding onderbouwen aan mijn begeleider, team of opdrachtgever.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                      </ol>
+                </section>
+                              <section class="kaart softskill intrede" style="--i:6" aria-labelledby="kop-10-softskill">
+                  <div class="groep-kop">
+                    <span class="groep-stip softskill" aria-hidden="true"></span>
+                    <h2 class="groep-titel" id="kop-10-softskill">Softskills</h2>
+                    <span class="groep-sub">· Oriëntatiefase · 8</span>
+                  </div>
+                  <ol class="lijst">
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">1</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Kritisch denken</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Softskills_001</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Kritisch denken"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="85">
+                                  <span class="lu-vulling" style="width: 85%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">85%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase kan ik een kritische en analytische houding tonen bij het gebruik van technologie. Ik kan onder begeleiding problemen oplossen en mijn leerproces evalueren.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">2</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Creatief denken</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Softskills_002</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Creatief denken"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="85">
+                                  <span class="lu-vulling" style="width: 85%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">85%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase heb ik geleerd om creatieve denkvaardigheden in te zetten om innovatieve oplossingen te bedenken in verschillende technische en niet-technische situaties, met begeleiding en ondersteuning waar nodig.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">3</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Samenwerken in teams</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Softskills_003</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Samenwerken in teams"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="95">
+                                  <span class="lu-vulling" style="width: 95%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">95%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase kan ik samenwerken in verschillende teams, actief bijdragen aan groepsprocessen en onder begeleiding reflecteren op de samenwerking binnen het team.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">4</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Communiceren en feedback</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Softskills_004</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Communiceren en feedback"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="95">
+                                  <span class="lu-vulling" style="width: 95%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">95%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase heb ik geleerd duidelijk en doelgericht te communiceren over technische en niet-technische onderwerpen en onder begeleiding feedback te geven en te ontvangen in teams.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">5</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Prioriteren en beslissen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Softskills_005</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Prioriteren en beslissen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="85">
+                                  <span class="lu-vulling" style="width: 85%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">85%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase heb ik geleerd hoe ik problemen kan oplossen en keuzes kan maken door analytisch te denken en prioriteiten te stellen. Onder begeleiding heb ik geleerd om verantwoordelijkheid te nemen voor mijn beslissingen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">6</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Flexibel blijven</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Softskills_006</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Flexibel blijven"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="90">
+                                  <span class="lu-vulling" style="width: 90%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">90%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase heb ik leren omgaan met uitdagingen en flexibel te blijven wanneer iets niet meteen lukt. Met ondersteuning heb ik geleerd geduldig en doelgericht te blijven werken aan lastige problemen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">7</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Ethiek en privacy</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Softskills_007</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Ethiek en privacy"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="85">
+                                  <span class="lu-vulling" style="width: 85%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">85%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase heb ik geleerd hoe belangrijk het is om ethisch en verantwoord om te gaan met digitale gegevens en onder begeleiding bij kan dragen aan veilige en privacy bewuste oplossingen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">8</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Lerende houding</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_OF_LU_Softskills_008</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Lerende houding"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="95">
+                                  <span class="lu-vulling" style="width: 95%; background: #15A363"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">95%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de oriëntatiefase kan ik een nieuwsgierige en lerende houding tonen. Onder begeleiding kan ik reflecteren op mijn ontwikkeling en bouw ik aan mijn doorzettingsvermogen bij uitdagingen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                      </ol>
+                </section>
+                          </div>
+                  </div>
+              <div class="lu-paneel" data-fase="11" data-eigen="1"
+             data-naam="Verdiepingsfase" >
+                      <div class="lu-raster">
+                              <section class="kaart hardskill intrede" style="--i:5" aria-labelledby="kop-11-hardskill">
+                  <div class="groep-kop">
+                    <span class="groep-stip hardskill" aria-hidden="true"></span>
+                    <h2 class="groep-titel" id="kop-11-hardskill">Hardskills</h2>
+                    <span class="groep-sub">· Verdiepingsfase · 8</span>
+                  </div>
+                  <ol class="lijst">
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">1</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Complexe taken uitvoeren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Hardskills_001</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Complexe taken uitvoeren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="10">
+                                  <span class="lu-vulling" style="width: 10%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">10%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik complexe taken uitvoeren binnen mijn vakgebied, zoals het installeren, plannen of configureren van systemen, software of processen. Dit doe ik onder beperkte begeleiding van mijn docent of begeleider.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">2</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Problemen analyseren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Hardskills_002</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Problemen analyseren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="25">
+                                  <span class="lu-vulling" style="width: 25%; background: #F08A24"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">25%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik afwijkingen en problemen signaleren en deze gestructureerd en logisch analyseren, met beperkte ondersteuning waar nodig.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">3</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Ontwerpen en opleveren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Hardskills_003</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Ontwerpen en opleveren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="5">
+                                  <span class="lu-vulling" style="width: 5%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">5%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik complexe principes van technische ontwerpen of configuraties toepassen en onder beperkte begeleiding meewerken aan de oplevering van ingewikkelde oplossingen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">4</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Samenwerken en communiceren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Hardskills_004</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Samenwerken en communiceren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="10">
+                                  <span class="lu-vulling" style="width: 10%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">10%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik samenwerken in een team en duidelijk en effectief communiceren, met beperkte ondersteuning van mijn begeleider waar nodig.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">5</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Beheer en security</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Hardskills_005</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Beheer en security"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="5">
+                                  <span class="lu-vulling" style="width: 5%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">5%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik systemen, netwerken en applicaties beheren en beveiligen. Ik pas cybersecurityprincipes toe en neem preventieve maatregelen tegen digitale dreigingen, onder beperkte begeleiding en in overleg.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">6</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Data-analyse</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Hardskills_006</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Data-analyse"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="15">
+                                  <span class="lu-vulling" style="width: 15%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">15%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik data analyseren en interpreteren. Ik gebruik deze inzichten om verbeteringen voor te stellen binnen processen, applicaties of systemen en maak keuzes en resultaten bespreekbaar, onder beperkte begelei</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">7</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Tools en werkwijze</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Hardskills_007</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Tools en werkwijze"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="5">
+                                  <span class="lu-vulling" style="width: 5%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">5%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik efficiënt werken met moderne tools en technieken om mijn werkwijze en samenwerking te optimaliseren. Ik pas deze toe en verbeter mijn werkwijze onder beperkte begeleiding.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">8</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Testen en verbeteren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Hardskills_008</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Testen en verbeteren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="5">
+                                  <span class="lu-vulling" style="width: 5%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">5%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik mijn eigen werk toetsen en verbeteren. Ik test mijn resultaten en verwerk feedback in herzieningen, met beperkte begeleiding van mijn begeleider, team of opdrachtgever.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                      </ol>
+                </section>
+                              <section class="kaart softskill intrede" style="--i:6" aria-labelledby="kop-11-softskill">
+                  <div class="groep-kop">
+                    <span class="groep-stip softskill" aria-hidden="true"></span>
+                    <h2 class="groep-titel" id="kop-11-softskill">Softskills</h2>
+                    <span class="groep-sub">· Verdiepingsfase · 8</span>
+                  </div>
+                  <ol class="lijst">
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">1</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Onderbouwen en bijsturen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Softskills_001</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Onderbouwen en bijsturen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="20">
+                                  <span class="lu-vulling" style="width: 20%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">20%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik zelfstandig mijn keuzes en acties onderbouwen op basis van argumentatie en feedback. Ik pas mijn werkwijze aan op basis van reflectie en input van collega’s, opdrachtgevers en stakeholders.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">2</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Kritisch denken</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Softskills_002</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Kritisch denken"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="5">
+                                  <span class="lu-vulling" style="width: 5%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">5%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik kritisch en analytisch denken toepassen bij het beoordelen van technologische vraagstukken en zelfstandig problemen oplossen. Ik evalueer mijn leerproces en pas inzichten toe om mijn werkwijze te verbeteren.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">3</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Creativiteit en innovatie</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Softskills_003</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Creativiteit en innovatie"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="25">
+                                  <span class="lu-vulling" style="width: 25%; background: #F08A24"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">25%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik creatieve denkvaardigheden zelfstandig toepassen en innovatieve oplossingen ontwikkelen voor technische en niet-technische uitdagingen. Ik experimenteer met nieuwe methodes en technologieën om process</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">4</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Doelgericht communiceren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Softskills_004</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Doelgericht communiceren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="20">
+                                  <span class="lu-vulling" style="width: 20%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">20%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik helder en doelgericht communiceren over technische en niet-technische onderwerpen en mijn boodschap afstemmen op mijn publiek. Ik geef en ontvang constructieve feedback en verwerk deze in mijn werk.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">5</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Multidisciplinair samenwerken</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Softskills_005</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Multidisciplinair samenwerken"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="5">
+                                  <span class="lu-vulling" style="width: 5%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">5%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik effectief samenwerken in multidisciplinaire teams en actief bijdragen aan een productieve werksfeer. Ik reflecteer zelfstandig op groepsprocessen en stuur mijn rol in het team bij waar nodig.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">6</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Veerkracht</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Softskills_006</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Veerkracht"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="15">
+                                  <span class="lu-vulling" style="width: 15%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">15%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik veerkracht en flexibiliteit tonen bij uitdagingen en doelgericht blijven werken, ook bij tegenslagen. Ik zoek zelfstandig naar oplossingen en pas mijn aanpak aan wanneer nodig.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">7</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Proactief leren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Softskills_007</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Proactief leren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="20">
+                                  <span class="lu-vulling" style="width: 20%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">20%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik een proactieve en lerende houding tonen door nieuwe kennis en vaardigheden actief te ontwikkelen. Ik reflecteer zelfstandig op mijn leerproces en pas inzichten toe om mij verder te ontwikkelen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">8</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Lerende houding</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_VF_LU_Softskills_008</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Lerende houding"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="10">
+                                  <span class="lu-vulling" style="width: 10%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">10%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Na de verdiepende fase kan ik een nieuwsgierige en lerende houding tonen. Ik reflecteer op mijn ontwikkeling en bouw doorzettingsvermogen op bij uitdagingen, met beperkte begeleiding waar nodig.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                      </ol>
+                </section>
+                          </div>
+                  </div>
+              <div class="lu-paneel" data-fase="12" data-eigen="0"
+             data-naam="Afrondingsfase"  hidden >
+                      <div class="lu-raster">
+                              <section class="kaart hardskill intrede" style="--i:5" aria-labelledby="kop-12-hardskill">
+                  <div class="groep-kop">
+                    <span class="groep-stip hardskill" aria-hidden="true"></span>
+                    <h2 class="groep-titel" id="kop-12-hardskill">Hardskills</h2>
+                    <span class="groep-sub">· Afrondingsfase · 8</span>
+                  </div>
+                  <ol class="lijst">
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">1</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Plannen en organiseren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Hardskills_001</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Plannen en organiseren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase complexe taken en werkzaamheden zelfstandig plannen en organiseren.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">2</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Voortgang bewaken</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Hardskills_002</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Voortgang bewaken"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase de voortgang van mijn werk zelfstandig bewaken en bijsturen waar nodig.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">3</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Ontwerpmodellen toepassen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Hardskills_003</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Ontwerpmodellen toepassen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase verschillende ontwerpprincipes en modellen toepassen om een technische oplossing uit te werken.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">4</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Software bouwen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Hardskills_004</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Software bouwen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase zelfstandig complexe onderdelen van software of systemen bouwen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">5</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Testplan maken</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Hardskills_005</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Testplan maken"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase een uitgebreid testplan maken met daarin verschillende testen en kwaliteitscriteria.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">6</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Testen en analyseren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Hardskills_006</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Testen en analyseren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase complexe tests zelfstandig uitvoeren, resultaten analyseren en verbeteradvies geven.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">7</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Testrapport schrijven</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Hardskills_007</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Testrapport schrijven"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase een testrapport maken met duidelijke conclusies en verbeteradviezen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">8</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Verbeteringen doorvoeren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Hardskills_008</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Verbeteringen doorvoeren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase zelfstandig verbeteringen bedenken, onderbouwen met analyse en doorvoeren in de praktijk.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                      </ol>
+                </section>
+                              <section class="kaart softskill intrede" style="--i:6" aria-labelledby="kop-12-softskill">
+                  <div class="groep-kop">
+                    <span class="groep-stip softskill" aria-hidden="true"></span>
+                    <h2 class="groep-titel" id="kop-12-softskill">Softskills</h2>
+                    <span class="groep-sub">· Afrondingsfase · 8</span>
+                  </div>
+                  <ol class="lijst">
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">1</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Problemen bespreken</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Softskills_001</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Problemen bespreken"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik kan tijdens de afrondende fase problemen herkennen en passende vervolgstappen bespreken met de juiste personen.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">2</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Actief overleggen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Softskills_002</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Actief overleggen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik neem tijdens de afrondende fase actief deel aan overleg met iedereen die betrokken is bij het project.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">3</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Feedback geven en ontvangen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Softskills_003</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Feedback geven en ontvangen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik geef en ontvang tijdens de afrondende fase feedback zonder begeleiding, op een professionele manier.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">4</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Reflecteren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Softskills_004</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Reflecteren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik reflecteer tijdens de afrondende fase op mijn eigen prestaties en het teamproces na het afronden van een opdracht.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">5</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Instructies schrijven</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Softskills_005</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Instructies schrijven"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik maak tijdens de afrondende fase duidelijke instructies voor gebruikers en leg risico’s op een begrijpelijke manier uit.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">6</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Documenteren</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Softskills_006</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Documenteren"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik documenteer tijdens de afrondende fase een netwerk of systeem op zo’n manier dat anderen het goed kunnen gebruiken.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">7</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Gebruikers uitleg geven</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Softskills_007</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Gebruikers uitleg geven"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik geef tijdens de afrondende fase uitleg aan gebruikers over systemen en pas bestaande instructies aan als dat nodig is.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                          
+                      <li>
+                        <details class="lu">
+                          <summary>
+                            <span class="lu-nr" aria-hidden="true">8</span>
+                            <span class="lu-kop">
+                              <span class="lu-term">Systemen in kaart brengen</span>
+                              <span class="lu-label"><span class="lu-labeltekst">IT_AF_LU_Softskills_008</span></span>
+                            </span>
+                                                          <span class="lu-meter">
+                                <span class="lu-balk" role="progressbar" aria-label="Voortgang Systemen in kaart brengen"
+                                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                  <span class="lu-vulling" style="width: 0%; background: #D0414B"></span>
+                                </span>
+                                <span class="lu-pct" aria-hidden="true">0%</span>
+                              </span>
+                                                        <svg class="lu-pijl" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                          </summary>
+                          <div class="lu-uitleg">
+                            <p class="lu-tekst">Ik breng tijdens de afrondende fase de onderdelen van een netwerk of systeem in kaart en leg die overzichtelijk vast.</p>
+                                                      </div>
+                        </details>
+                      </li>
+                                      </ol>
+                </section>
+                          </div>
+                  </div>
+          </div>
+    <p class="sr-only" role="status" id="wisselStatus"></p>
+
+  </div>
+  </main>
+
+<dialog class="leerdoel" id="leerdoelDialog" aria-labelledby="leerdoelTitel">
+  <form method="POST" action="/leerdoelen" id="ldForm" novalidate>
+    <input type="hidden" name="_token" value="" autocomplete="off">    <input type="hidden" name="actie" value="toevoegen">
+    <h2 id="leerdoelTitel">Leerdoel maken</h2>
+    <p class="dlg-uitleg">Een leerdoel hoeft niet bij een skill te horen. Je kunt ook opschrijven wat je wilt worden of leren.</p>
+    <fieldset class="dlg-veld"><legend>Fase</legend>
+      <div class="keuzes">
+                  <label class="keuze"><input type="radio" name="ld_fase" value="10" ><span>Oriëntatiefase</span></label>
+                  <label class="keuze"><input type="radio" name="ld_fase" value="11" checked><span>Verdiepingsfase</span></label>
+                  <label class="keuze"><input type="radio" name="ld_fase" value="12" ><span>Afrondingsfase</span></label>
+              </div>
+    </fieldset>
+    <fieldset class="dlg-veld"><legend>Skills <small>(optioneel, kies er één of meer)</small></legend>
+      <div class="skill-chips" id="ldChips" aria-live="polite"></div>
+      <div class="skilllijst" id="ldSkills" role="group" aria-label="Skills"></div>
+    </fieldset>
+    <label class="dlg-veld"><span>Wat wil je bereiken?</span>
+      <textarea class="dlg-invoer" name="omschrijving" id="ldTekst" maxlength="300" aria-describedby="ldFout"
+                placeholder="Bijvoorbeeld: ik wil beter worden in het plannen van mijn werk."></textarea>
+      <p class="dlg-fout" id="ldFout" role="alert" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Schrijf eerst op wat je wilt bereiken.
+      </p>
+    </label>
+    <div class="dlg-knoppen">
+      <button type="button" class="knop knop--secundair" id="ldSluit">Annuleren</button>
+      <button type="submit" class="knop knop--primair">Leerdoel opslaan</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  /* Leerdoel maken: de knop opent een venster. Zonder JavaScript is de knop gewoon een link naar de pagina Leerdoelen. */
+  (function () {
+    var knop = document.getElementById('leerdoelKnop');
+    var dlg = document.getElementById('leerdoelDialog');
+    if (!knop || !dlg || typeof dlg.showModal !== 'function') return;
+    var keuze = [{"id":10,"naam":"Ori\u00ebntatiefase","skills":[{"code":"IT_OF_LU_Hardskills_001","tekst":"Hardskill 1 \u2013 Taken uitvoeren","term":"Taken uitvoeren","nummer":1,"soort":"hardskill"},{"code":"IT_OF_LU_Hardskills_002","tekst":"Hardskill 2 \u2013 Problemen signaleren","term":"Problemen signaleren","nummer":2,"soort":"hardskill"},{"code":"IT_OF_LU_Hardskills_003","tekst":"Hardskill 3 \u2013 Technisch ontwerpen","term":"Technisch ontwerpen","nummer":3,"soort":"hardskill"},{"code":"IT_OF_LU_Hardskills_004","tekst":"Hardskill 4 \u2013 Samenwerken en communiceren","term":"Samenwerken en communiceren","nummer":4,"soort":"hardskill"},{"code":"IT_OF_LU_Hardskills_005","tekst":"Hardskill 5 \u2013 Voortgang rapporteren","term":"Voortgang rapporteren","nummer":5,"soort":"hardskill"},{"code":"IT_OF_LU_Hardskills_006","tekst":"Hardskill 6 \u2013 Kwaliteit met tools","term":"Kwaliteit met tools","nummer":6,"soort":"hardskill"},{"code":"IT_OF_LU_Hardskills_007","tekst":"Hardskill 7 \u2013 Veilig werken","term":"Veilig werken","nummer":7,"soort":"hardskill"},{"code":"IT_OF_LU_Hardskills_008","tekst":"Hardskill 8 \u2013 Keuzes onderbouwen","term":"Keuzes onderbouwen","nummer":8,"soort":"hardskill"},{"code":"IT_OF_LU_Softskills_001","tekst":"Softskill 1 \u2013 Kritisch denken","term":"Kritisch denken","nummer":1,"soort":"softskill"},{"code":"IT_OF_LU_Softskills_002","tekst":"Softskill 2 \u2013 Creatief denken","term":"Creatief denken","nummer":2,"soort":"softskill"},{"code":"IT_OF_LU_Softskills_003","tekst":"Softskill 3 \u2013 Samenwerken in teams","term":"Samenwerken in teams","nummer":3,"soort":"softskill"},{"code":"IT_OF_LU_Softskills_004","tekst":"Softskill 4 \u2013 Communiceren en feedback","term":"Communiceren en feedback","nummer":4,"soort":"softskill"},{"code":"IT_OF_LU_Softskills_005","tekst":"Softskill 5 \u2013 Prioriteren en beslissen","term":"Prioriteren en beslissen","nummer":5,"soort":"softskill"},{"code":"IT_OF_LU_Softskills_006","tekst":"Softskill 6 \u2013 Flexibel blijven","term":"Flexibel blijven","nummer":6,"soort":"softskill"},{"code":"IT_OF_LU_Softskills_007","tekst":"Softskill 7 \u2013 Ethiek en privacy","term":"Ethiek en privacy","nummer":7,"soort":"softskill"},{"code":"IT_OF_LU_Softskills_008","tekst":"Softskill 8 \u2013 Lerende houding","term":"Lerende houding","nummer":8,"soort":"softskill"}]},{"id":11,"naam":"Verdiepingsfase","skills":[{"code":"IT_VF_LU_Hardskills_001","tekst":"Hardskill 1 \u2013 Complexe taken uitvoeren","term":"Complexe taken uitvoeren","nummer":1,"soort":"hardskill"},{"code":"IT_VF_LU_Hardskills_002","tekst":"Hardskill 2 \u2013 Problemen analyseren","term":"Problemen analyseren","nummer":2,"soort":"hardskill"},{"code":"IT_VF_LU_Hardskills_003","tekst":"Hardskill 3 \u2013 Ontwerpen en opleveren","term":"Ontwerpen en opleveren","nummer":3,"soort":"hardskill"},{"code":"IT_VF_LU_Hardskills_004","tekst":"Hardskill 4 \u2013 Samenwerken en communiceren","term":"Samenwerken en communiceren","nummer":4,"soort":"hardskill"},{"code":"IT_VF_LU_Hardskills_005","tekst":"Hardskill 5 \u2013 Beheer en security","term":"Beheer en security","nummer":5,"soort":"hardskill"},{"code":"IT_VF_LU_Hardskills_006","tekst":"Hardskill 6 \u2013 Data-analyse","term":"Data-analyse","nummer":6,"soort":"hardskill"},{"code":"IT_VF_LU_Hardskills_007","tekst":"Hardskill 7 \u2013 Tools en werkwijze","term":"Tools en werkwijze","nummer":7,"soort":"hardskill"},{"code":"IT_VF_LU_Hardskills_008","tekst":"Hardskill 8 \u2013 Testen en verbeteren","term":"Testen en verbeteren","nummer":8,"soort":"hardskill"},{"code":"IT_VF_LU_Softskills_001","tekst":"Softskill 1 \u2013 Onderbouwen en bijsturen","term":"Onderbouwen en bijsturen","nummer":1,"soort":"softskill"},{"code":"IT_VF_LU_Softskills_002","tekst":"Softskill 2 \u2013 Kritisch denken","term":"Kritisch denken","nummer":2,"soort":"softskill"},{"code":"IT_VF_LU_Softskills_003","tekst":"Softskill 3 \u2013 Creativiteit en innovatie","term":"Creativiteit en innovatie","nummer":3,"soort":"softskill"},{"code":"IT_VF_LU_Softskills_004","tekst":"Softskill 4 \u2013 Doelgericht communiceren","term":"Doelgericht communiceren","nummer":4,"soort":"softskill"},{"code":"IT_VF_LU_Softskills_005","tekst":"Softskill 5 \u2013 Multidisciplinair samenwerken","term":"Multidisciplinair samenwerken","nummer":5,"soort":"softskill"},{"code":"IT_VF_LU_Softskills_006","tekst":"Softskill 6 \u2013 Veerkracht","term":"Veerkracht","nummer":6,"soort":"softskill"},{"code":"IT_VF_LU_Softskills_007","tekst":"Softskill 7 \u2013 Proactief leren","term":"Proactief leren","nummer":7,"soort":"softskill"},{"code":"IT_VF_LU_Softskills_008","tekst":"Softskill 8 \u2013 Lerende houding","term":"Lerende houding","nummer":8,"soort":"softskill"}]},{"id":12,"naam":"Afrondingsfase","skills":[{"code":"IT_AF_LU_Hardskills_001","tekst":"Hardskill 1 \u2013 Plannen en organiseren","term":"Plannen en organiseren","nummer":1,"soort":"hardskill"},{"code":"IT_AF_LU_Hardskills_002","tekst":"Hardskill 2 \u2013 Voortgang bewaken","term":"Voortgang bewaken","nummer":2,"soort":"hardskill"},{"code":"IT_AF_LU_Hardskills_003","tekst":"Hardskill 3 \u2013 Ontwerpmodellen toepassen","term":"Ontwerpmodellen toepassen","nummer":3,"soort":"hardskill"},{"code":"IT_AF_LU_Hardskills_004","tekst":"Hardskill 4 \u2013 Software bouwen","term":"Software bouwen","nummer":4,"soort":"hardskill"},{"code":"IT_AF_LU_Hardskills_005","tekst":"Hardskill 5 \u2013 Testplan maken","term":"Testplan maken","nummer":5,"soort":"hardskill"},{"code":"IT_AF_LU_Hardskills_006","tekst":"Hardskill 6 \u2013 Testen en analyseren","term":"Testen en analyseren","nummer":6,"soort":"hardskill"},{"code":"IT_AF_LU_Hardskills_007","tekst":"Hardskill 7 \u2013 Testrapport schrijven","term":"Testrapport schrijven","nummer":7,"soort":"hardskill"},{"code":"IT_AF_LU_Hardskills_008","tekst":"Hardskill 8 \u2013 Verbeteringen doorvoeren","term":"Verbeteringen doorvoeren","nummer":8,"soort":"hardskill"},{"code":"IT_AF_LU_Softskills_001","tekst":"Softskill 1 \u2013 Problemen bespreken","term":"Problemen bespreken","nummer":1,"soort":"softskill"},{"code":"IT_AF_LU_Softskills_002","tekst":"Softskill 2 \u2013 Actief overleggen","term":"Actief overleggen","nummer":2,"soort":"softskill"},{"code":"IT_AF_LU_Softskills_003","tekst":"Softskill 3 \u2013 Feedback geven en ontvangen","term":"Feedback geven en ontvangen","nummer":3,"soort":"softskill"},{"code":"IT_AF_LU_Softskills_004","tekst":"Softskill 4 \u2013 Reflecteren","term":"Reflecteren","nummer":4,"soort":"softskill"},{"code":"IT_AF_LU_Softskills_005","tekst":"Softskill 5 \u2013 Instructies schrijven","term":"Instructies schrijven","nummer":5,"soort":"softskill"},{"code":"IT_AF_LU_Softskills_006","tekst":"Softskill 6 \u2013 Documenteren","term":"Documenteren","nummer":6,"soort":"softskill"},{"code":"IT_AF_LU_Softskills_007","tekst":"Softskill 7 \u2013 Gebruikers uitleg geven","term":"Gebruikers uitleg geven","nummer":7,"soort":"softskill"},{"code":"IT_AF_LU_Softskills_008","tekst":"Softskill 8 \u2013 Systemen in kaart brengen","term":"Systemen in kaart brengen","nummer":8,"soort":"softskill"}]}];
+    var lijst = document.getElementById('ldSkills');
+    var tekst = document.getElementById('ldTekst');
+    var fout = document.getElementById('ldFout');
+
+    var gekozen = {};   // code -> {term, soort}: je keuze blijft staan als je van fase wisselt, zodat je skills kunt combineren
+    var chips = document.getElementById('ldChips');
+    var KRUIS = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true" focusable="false"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
+    var VINKJE = '<span class="vink" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" focusable="false"><polyline points="20 6 9 17 4 12"></polyline></svg></span>';
+    function toonChips() {
+      chips.textContent = '';
+      Object.keys(gekozen).forEach(function (code) {
+        var g = gekozen[code];
+        var c = document.createElement('span'); c.className = 'skill-chip'; c.dataset.soort = g.soort;
+        c.appendChild(document.createTextNode(g.term));
+        var x = document.createElement('button'); x.type = 'button'; x.innerHTML = KRUIS; x.setAttribute('aria-label', 'Haal ' + g.term + ' weg');
+        x.addEventListener('click', function () {
+          delete gekozen[code];
+          var i = lijst.querySelector('input[value="' + code + '"]'); if (i) i.checked = false;
+          toonChips();
+        });
+        c.appendChild(x); chips.appendChild(c);
+      });
+    }
+    function maakRij(s) {
+      var l = document.createElement('label'); l.className = 'skill-optie'; l.dataset.soort = s.soort;
+      var i = document.createElement('input'); i.type = 'checkbox'; i.name = 'lu[]'; i.value = s.code; i.checked = !!gekozen[s.code];
+      i.addEventListener('change', function () {
+        if (i.checked) gekozen[s.code] = { term: s.term, soort: s.soort }; else delete gekozen[s.code];
+        toonChips();
+      });
+      l.appendChild(i); l.insertAdjacentHTML('beforeend', VINKJE);
+      var nr = document.createElement('span'); nr.className = 'skill-nr'; nr.textContent = s.nummer;
+      var naam = document.createElement('span'); naam.className = 'skill-naam'; naam.textContent = s.term;
+      l.appendChild(nr); l.appendChild(naam); lijst.appendChild(l);
+    }
+    function vulSkills() {
+      var gekozenFase = document.querySelector('input[name="ld_fase"]:checked');
+      var f = keuze.filter(function (x) { return gekozenFase && String(x.id) === gekozenFase.value; })[0];
+      lijst.textContent = '';
+      [['hard', 'Hardskills'], ['soft', 'Softskills']].forEach(function (g) {
+        var items = (f ? f.skills : []).filter(function (s) { return s.code.indexOf('_' + (g[0] === 'hard' ? 'Hardskills' : 'Softskills') + '_') > -1; });
+        if (!items.length) return;
+        var k = document.createElement('div'); k.className = 'skilllijst-kop' + (g[0] === 'soft' ? ' soft' : ''); k.textContent = g[1]; lijst.appendChild(k);
+        items.forEach(maakRij);
+      });
+      lijst.scrollTop = 0;
+    }
+    function toonFout(aan) {
+      fout.hidden = !aan; tekst.setAttribute('aria-invalid', aan ? 'true' : 'false');
+      if (aan) { fout.classList.remove('schud'); void fout.offsetWidth; fout.classList.add('schud'); }
+    }
+    document.querySelectorAll('input[name="ld_fase"]').forEach(function (r) { r.addEventListener('change', vulSkills); });
+    tekst.addEventListener('input', function () { if (tekst.value.trim() !== '') toonFout(false); });
+    document.getElementById('ldForm').addEventListener('submit', function (e) {
+      // Skills uit een andere fase dan de getoonde horen er ook bij: als verborgen velden meesturen
+      var al = {}; lijst.querySelectorAll('input:checked').forEach(function (i) { al[i.value] = true; });
+      document.querySelectorAll('#ldForm input.ld-extra').forEach(function (i) { i.remove(); });
+      Object.keys(gekozen).forEach(function (code) {
+        if (al[code]) return;
+        var h = document.createElement('input'); h.type = 'hidden'; h.name = 'lu[]'; h.value = code; h.className = 'ld-extra';
+        document.getElementById('ldForm').appendChild(h);
+      });
+      if (tekst.value.trim() === '') { e.preventDefault(); toonFout(true); tekst.focus(); }   // eigen melding i.p.v. die van de browser
+    });
+    knop.addEventListener('click', function (e) { e.preventDefault(); gekozen = {}; toonChips(); vulSkills(); toonFout(false); dlg.showModal(); tekst.focus(); });
+    document.getElementById('ldSluit').addEventListener('click', function () { dlg.close(); });
+    dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });   // klik naast het venster sluit het
+  })();
+</script>
+
+<script>
+  /* Wisselen van fase en soort ZONDER de pagina te herladen.
+     Alle fases staan al op de pagina; dit script laat alleen een ander paneel zien en zet de keuze in de URL
+     (history.pushState), zodat verversen, de terugknop en een gedeelde link blijven werken.
+     Zonder JavaScript zijn het gewone links en kiest de server de fase. */
+  (function () {
+    var panelen = document.getElementById('luPanelen');
+    if (!panelen || !window.history || !history.pushState) return;
+    var stappen = document.querySelectorAll('.route .stap');
+    var soortKnoppen = document.querySelectorAll('.segment a');
+    var tip = document.getElementById('tipLeerdoel');
+    var status = document.getElementById('wisselStatus');
+    var basisUrl = '/leeruitkomsten';
+
+    function huidig() {
+      var open = panelen.querySelector('.lu-paneel:not([hidden])');
+      return { fase: open ? open.dataset.fase : '', soort: panelen.dataset.soort || '' };
+    }
+    function maakUrl(fase, soort) {
+      var q = [];
+      if (fase) q.push('fase=' + encodeURIComponent(fase));
+      if (soort) q.push('soort=' + encodeURIComponent(soort));
+      return basisUrl + (q.length ? '?' + q.join('&') : '');
+    }
+
+    /* ---------- Schuivend donker blok ---------- */
+    var route = document.querySelector('.route');
+    var segment = document.querySelector('.segment');
+    function maakSchuif(houder) {
+      var blok = document.createElement('span');
+      blok.className = 'schuif zonder-overgang';
+      blok.setAttribute('aria-hidden', 'true');
+      houder.insertBefore(blok, houder.firstChild);
+      houder.classList.add('met-schuif');
+      return blok;
+    }
+    var routeSchuif = route ? maakSchuif(route) : null;
+    var segmentSchuif = segment ? maakSchuif(segment) : null;
+
+    // Zet het blok precies over de actieve knop (positie t.o.v. de houder: offsetLeft/offsetTop).
+    function plaats(blok, doel) {
+      if (!blok || !doel) return;
+      blok.style.width = doel.offsetWidth + 'px';
+      blok.style.height = doel.offsetHeight + 'px';
+      blok.style.transform = 'translate(' + doel.offsetLeft + 'px, ' + doel.offsetTop + 'px)';
+    }
+    function plaatsAlles() {
+      plaats(routeSchuif, route && route.querySelector('[aria-current="page"]'));
+      plaats(segmentSchuif, segment && segment.querySelector('[aria-current="true"]'));
+    }
+    plaatsAlles();
+    // Pas na de eerste tekening de overgang aanzetten, anders schuift het blok bij het laden vanaf links binnen.
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      [routeSchuif, segmentSchuif].forEach(function (b) { if (b) b.classList.remove('zonder-overgang'); });
+    }); });
+    // Venster smaller/breder (of route van naast elkaar naar onder elkaar): opnieuw plaatsen, zonder animatie.
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () {
+        [routeSchuif, segmentSchuif].forEach(function (b) { if (b) b.classList.add('zonder-overgang'); });
+        plaatsAlles();
+        requestAnimationFrame(function () { [routeSchuif, segmentSchuif].forEach(function (b) { if (b) b.classList.remove('zonder-overgang'); }); });
+      }).observe(route || document.body);
+    }
+
+    var SOORT_VOLGORDE = { '': 0, 'hard': 1, 'soft': 2 };
+    function volgorde(fase) {
+      var i = -1;
+      stappen.forEach(function (a, j) { if (a.dataset.fase === String(fase)) i = j; });
+      return i;
+    }
+
+    function toon(fase, soort, url) {
+      var oud = huidig();
+      var gevonden = false;
+      panelen.querySelectorAll('.lu-paneel').forEach(function (p) {
+        var aan = p.dataset.fase === String(fase);
+        p.hidden = !aan;
+        if (aan) {
+          gevonden = true;
+          if (tip) tip.hidden = p.dataset.eigen !== '1';
+          if (status) status.textContent = p.dataset.naam + (soort ? ', ' + (soort === 'hard' ? 'hardskills' : 'softskills') : '') + ' getoond.';
+        }
+      });
+      if (!gevonden) return false;
+      panelen.dataset.soort = soort;
+
+      // Knoppen bijwerken: welke is actief, en de links houden de andere keuze vast.
+      stappen.forEach(function (a) {
+        if (a.dataset.fase === String(fase)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+        a.href = maakUrl(a.dataset.fase, soort);
+      });
+      soortKnoppen.forEach(function (a) {
+        if ((a.dataset.soort || '') === soort) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+        a.href = maakUrl(fase, a.dataset.soort || '');
+      });
+
+      // Het donkere blok naar de nieuwe keuze laten schuiven
+      plaatsAlles();
+
+      // Inhoud komt binnen vanaf de kant waar je naartoe klikt (rechts = verder in de rij)
+      var stapRichting = volgorde(fase) - volgorde(oud.fase);
+      var soortRichting = SOORT_VOLGORDE[soort] - SOORT_VOLGORDE[oud.soort];
+      var richting = stapRichting || soortRichting;
+      panelen.dataset.richting = richting > 0 ? 'rechts' : (richting < 0 ? 'links' : '');
+      panelen.classList.remove('wissel'); void panelen.offsetWidth; panelen.classList.add('wissel');
+      if (url) history.pushState({ fase: fase, soort: soort }, '', url);
+      return true;
+    }
+
+    function klik(e, fase, soort) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; // nieuw tabblad: gewoon de link volgen
+      if (toon(fase, soort, maakUrl(fase, soort))) e.preventDefault();
+    }
+    stappen.forEach(function (a) {
+      a.addEventListener('click', function (e) { klik(e, a.dataset.fase, huidig().soort); });
+    });
+    soortKnoppen.forEach(function (a) {
+      a.addEventListener('click', function (e) { klik(e, huidig().fase, a.dataset.soort || ''); });
+    });
+
+    // Terugknop / vooruitknop: de keuze uit de URL opnieuw tonen.
+    history.replaceState(huidig(), '', location.href);
+    window.addEventListener('popstate', function (e) {
+      var s = e.state || {};
+      if (s.fase) toon(s.fase, s.soort || '', null);
+    });
+  })();
+
+  // Alles open- of dichtklappen (in de fase die je nu ziet)
+  (function () {
+    var knop = document.getElementById('allesOpen');
+    if (!knop) return;
+    knop.addEventListener('click', function () {
+      var open = knop.getAttribute('aria-pressed') !== 'true';
+      document.querySelectorAll('.lu-paneel:not([hidden]) details.lu').forEach(function (d) { d.open = open; });
+      knop.setAttribute('aria-pressed', open ? 'true' : 'false');
+      knop.textContent = open ? 'Alles dichtklappen' : 'Alles openklappen';
+    });
+  })();
+
+  // Navigatiebalk in- en uitklappen (zelfde als op het dashboard).
+  (function () {
+    var rail = document.getElementById('navRail');
+    var toggle = document.getElementById('navToggle');
+    if (!rail || !toggle) return;
+    toggle.setAttribute('aria-expanded', rail.classList.contains('expanded') ? 'true' : 'false');
+    toggle.setAttribute('aria-controls', 'navRail');
+    toggle.addEventListener('click', function () {
+      var open = rail.classList.toggle('expanded');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  })();
+</script>
+
+</body>
+</html>
